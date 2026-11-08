@@ -1,0 +1,103 @@
+# 統計学
+# 出典: OpenIntro Statistics 4th ed.（無料公開）, Boyd & Vandenberghe（最小二乗）
+
+- id: stat.unbiased
+  kind: definition
+  subject: statistics
+  title: 不偏推定量
+  requires: [prob.expectation]
+  source: OpenIntro Statistics 4e, Ch.5
+  statement: |-
+    未知のパラメータ $\theta$ をデータ $X_1, \dots, X_n$ から推定する関数 $\hat{\theta} = \hat{\theta}(X_1, \dots, X_n)$ を**推定量**という。
+    $$E[\hat{\theta}] = \theta$$
+    がすべての $\theta$ で成り立つとき**不偏**という。推定の良さは平均二乗誤差 $E[(\hat\theta - \theta)^2] = \operatorname{Var}(\hat\theta) + (E[\hat\theta] - \theta)^2$ で測ることが多い（分散 + バイアスの2乗）。
+  questions:
+    - q: |-
+        不偏推定量は常にバイアスのある推定量より良いか？
+      a: |-
+        そうとは限らない。平均二乗誤差 = 分散 + バイアス² なので、少しバイアスを入れて分散を大きく減らす推定量（リッジ回帰など）のほうが誤差が小さいことがある。
+
+- id: stat.sample-variance
+  kind: theorem
+  subject: statistics
+  title: 標本分散の不偏性（n−1 で割る理由）
+  requires: [stat.unbiased, prob.variance]
+  source: OpenIntro Statistics 4e, Ch.2, Ch.7
+  statement: |-
+    $X_1, \dots, X_n$ が独立同分布で $E[X_i] = \mu$, $\operatorname{Var}(X_i) = \sigma^2$ とする。$\bar{X} = \frac1n \sum X_i$ として
+    $$S^2 = \frac{1}{n-1}\sum_{i=1}^n (X_i - \bar{X})^2$$
+    とおくと $E[S^2] = \sigma^2$。
+  proof:
+    - |-
+      展開すると $\sum_i (X_i - \bar{X})^2 = \sum_i X_i^2 - n\bar{X}^2$。
+    - |-
+      $E[X_i^2] = \operatorname{Var}(X_i) + \mu^2 = \sigma^2 + \mu^2$。
+    - |-
+      独立性から $\operatorname{Var}(\bar{X}) = \sigma^2/n$ なので $E[\bar{X}^2] = \sigma^2/n + \mu^2$。
+    - |-
+      よって $E\left[\sum (X_i - \bar{X})^2\right] = n(\sigma^2 + \mu^2) - n(\sigma^2/n + \mu^2) = (n-1)\sigma^2$。
+    - |-
+      $n - 1$ で割れば $E[S^2] = \sigma^2$。
+  questions:
+    - q: |-
+        直感的に、$n$ で割ると小さめに偏る理由は？
+      a: |-
+        偏差を真の平均 $\mu$ ではなく、データに最も近くなるよう選ばれた $\bar{X}$ から測っているため、平方和が本来より小さく出る。$\bar{X}$ を推定するのに自由度を1つ使った、とも言える。
+    - q: |-
+        独立性の仮定を外すと何が起こるか？反例を挙げよ。
+      a: |-
+        成り立たない。すべての $X_i = X_1$ なら各偏差が $0$ なので $S^2 = 0$、$E[S^2] = 0 \ne \sigma^2$。
+
+- id: stat.confidence-interval
+  kind: definition
+  subject: statistics
+  title: 信頼区間
+  requires: [prob.clt, stat.unbiased]
+  source: OpenIntro Statistics 4e, Ch.5
+  statement: |-
+    データから作る区間 $[L, U]$（$L, U$ は確率変数）が、真のパラメータ $\theta$ に対して
+    $$P(L \le \theta \le U) = 1 - \alpha$$
+    を満たすとき、**信頼度 $1 - \alpha$ の信頼区間**という。確率的に動くのは区間のほうで、$\theta$ は固定された未知の定数。
+  questions:
+    - q: |-
+        「この 95% 信頼区間 $[2.1, 3.4]$ に $\mu$ が入る確率は 95%」は正しい解釈か？
+      a: |-
+        頻度論の立場では正しくない。データを得たあとの区間はただの数で、$\mu$ は入っているかいないかのどちらか。正しくは「同じ手順で区間を作り続けると、その 95% が $\mu$ を含む」。
+
+- id: stat.z-interval
+  kind: problem
+  subject: statistics
+  title: 母平均の信頼区間（計算）
+  requires: [stat.confidence-interval]
+  generator: stat.z-interval
+
+- id: stat.least-squares
+  kind: theorem
+  subject: statistics
+  title: 最小二乗法と正規方程式
+  requires: [la.det-invertible, la.inner-product, stat.unbiased]
+  source: OpenIntro Statistics 4e, Ch.8–9 / Boyd & Vandenberghe, Ch.6
+  why: |-
+    実験データへの直線・曲線のあてはめ、センサー較正、回帰分析、機械学習の線形モデル。研究で最も頻繁に使う道具の1つ。
+  statement: |-
+    $X \in \mathbb{R}^{n \times p}$, $y \in \mathbb{R}^n$ とする。$\beta$ が $\|X\beta - y\|^2$ を最小にするための必要十分条件は**正規方程式**
+    $$X^\top X \beta = X^\top y$$
+    を満たすこと。$X$ の列が1次独立なら解はただ1つで $\hat\beta = (X^\top X)^{-1} X^\top y$。
+  proof:
+    - |-
+      $f(\beta) = \|X\beta - y\|^2 = \beta^\top X^\top X \beta - 2\beta^\top X^\top y + y^\top y$ と展開する。
+    - |-
+      勾配は $\nabla f(\beta) = 2X^\top X\beta - 2X^\top y$。
+    - |-
+      $X^\top X$ は半正定値（$v^\top X^\top X v = \|Xv\|^2 \ge 0$）なので $f$ は凸で、勾配が $0$ の点が最小点。これが正規方程式。
+    - |-
+      列が1次独立なら $v \ne 0 \Rightarrow Xv \ne 0$ なので $X^\top X$ は正定値、特に可逆。よって解は一意。
+  questions:
+    - q: |-
+        「列が1次独立」の仮定を外すと何が起こるか？例を挙げよ。
+      a: |-
+        最小点が一意でなくなる。$X$ に同じ列が2本あれば、$\hat\beta$ に $t(1, -1, 0, \dots)$ を加えても $X\beta$ は変わらない（多重共線性）。このときは正則化や擬似逆行列を使う。
+    - q: |-
+        数値計算で $(X^\top X)^{-1}$ を直接計算しないほうがよい理由は？
+      a: |-
+        $X^\top X$ の条件数は $X$ の条件数の2乗になり、丸め誤差が増幅される。QR 分解や特異値分解で解くのが標準。

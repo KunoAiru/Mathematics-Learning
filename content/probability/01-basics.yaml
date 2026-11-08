@@ -1,0 +1,246 @@
+# 確率論
+# 出典の章番号は Grinstead & Snell, Introduction to Probability（無料公開）
+
+- id: prob.space
+  kind: definition
+  subject: probability
+  title: 確率空間
+  requires: []
+  source: Grinstead & Snell, Ch.1–2
+  why: |-
+    「確率」を曖昧な直感でなく、集合と関数で書ける対象にする。乱択アルゴリズムの解析やセキュリティの攻撃成功確率の評価は、すべてこの上で行う。
+  statement: |-
+    **確率空間**とは組 $(\Omega, \mathcal{F}, P)$ で、$\Omega$ は標本空間（起こりうる結果全体）、$\mathcal{F}$ は事象（$\Omega$ の部分集合）の族、$P: \mathcal{F} \to [0, 1]$ は次を満たす関数:
+
+    1. $P(\Omega) = 1$
+    2. 互いに素な事象 $A_1, A_2, \dots$ について $P\left(\bigcup_i A_i\right) = \sum_i P(A_i)$（可算加法性）
+
+    ここから $P(A^c) = 1 - P(A)$, $P(A \cup B) = P(A) + P(B) - P(A \cap B)$ などが導かれる。
+  questions:
+    - q: |-
+        $P(A \cup B) \le P(A) + P(B)$（和集合上界）を公理から示せ。
+      a: |-
+        $P(A \cup B) = P(A) + P(B) - P(A \cap B)$ で、$P(A \cap B) \ge 0$ だから。多数の「悪い事象」のどれかが起きる確率を、それぞれの確率の和で押さえるのに使う（ユニオンバウンド）。
+
+- id: prob.conditional
+  kind: definition
+  subject: probability
+  title: 条件付き確率と独立性
+  requires: [prob.space]
+  source: Grinstead & Snell, Ch.4
+  statement: |-
+    $P(B) > 0$ のとき、$B$ のもとでの $A$ の**条件付き確率**を
+    $$P(A \mid B) = \frac{P(A \cap B)}{P(B)}$$
+    と定める。事象 $A, B$ が**独立**であるとは $P(A \cap B) = P(A)P(B)$ が成り立つこと。
+  questions:
+    - q: |-
+        「互いに素（排反）」と「独立」は同じか？
+      a: |-
+        ちがう。$P(A), P(B) > 0$ で排反なら $P(A \cap B) = 0 \ne P(A)P(B)$ なので、むしろ独立ではない（一方が起きればもう一方は起きないと分かる）。
+    - q: |-
+        $A, B, C$ が2つずつ独立なら3つ組として独立（$P(A \cap B \cap C) = P(A)P(B)P(C)$）か？
+      a: |-
+        一般には成り立たない。公平なコインを2回投げ、$A$ = 1回目が表、$B$ = 2回目が表、$C$ = 2回の結果が一致。どの2つも独立だが $P(A \cap B \cap C) = 1/4 \ne 1/8$。
+
+- id: prob.bayes
+  kind: theorem
+  subject: probability
+  title: ベイズの定理
+  requires: [prob.conditional]
+  source: Grinstead & Snell, Ch.4
+  why: |-
+    観測から原因を推定する式。スパムフィルタ、故障診断、侵入検知の誤報率の見積もり、ベイズ推定の基礎。
+  statement: |-
+    $B_1, \dots, B_n$ が $\Omega$ の分割（互いに素で和集合が $\Omega$）で $P(B_i) > 0$、$P(A) > 0$ ならば
+    $$P(B_j \mid A) = \frac{P(A \mid B_j)\,P(B_j)}{\sum_{i=1}^n P(A \mid B_i)\,P(B_i)}.$$
+  proof:
+    - |-
+      条件付き確率の定義から $P(A \cap B_j) = P(A \mid B_j) P(B_j)$。
+    - |-
+      同じく定義から $P(B_j \mid A) = P(A \cap B_j) / P(A)$。
+    - |-
+      $A = \bigcup_i (A \cap B_i)$ は互いに素な和なので $P(A) = \sum_i P(A \cap B_i) = \sum_i P(A \mid B_i) P(B_i)$（全確率の公式）。
+    - |-
+      これらを代入して結論を得る。
+  questions:
+    - q: |-
+        $P(A \mid B)$ と $P(B \mid A)$ を取り違えるとどんな誤りになるか？例を挙げよ。
+      a: |-
+        「病気なら 99% 陽性」から「陽性なら 99% 病気」と結論する誤り（検察官の誤謬）。有病率が 0.1% なら、偽陽性率 1% でも陽性者のうち本当に病気なのは約 9% にすぎない。
+
+- id: prob.bayes-test
+  kind: problem
+  subject: probability
+  title: 検査の陽性的中率（計算）
+  requires: [prob.bayes]
+  generator: prob.bayes-test
+
+- id: prob.expectation
+  kind: definition
+  subject: probability
+  title: 確率変数と期待値
+  requires: [prob.space]
+  source: Grinstead & Snell, Ch.6
+  statement: |-
+    **確率変数**とは関数 $X: \Omega \to \mathbb{R}$。離散確率変数 $X$ の**期待値**は
+    $$E[X] = \sum_x x\, P(X = x)$$
+    （右辺が絶対収束するとき）。連続なら密度 $f$ を使って $E[X] = \int x f(x)\,dx$。
+  questions:
+    - q: |-
+        $E[X]$ が存在しない例を挙げよ。
+      a: |-
+        $P(X = 2^k) = 2^{-k}$（$k = 1, 2, \dots$）なら $\sum 2^k \cdot 2^{-k} = \sum 1 = \infty$（サンクトペテルブルクのパラドックス）。連続ならコーシー分布。
+
+- id: prob.linearity
+  kind: theorem
+  subject: probability
+  title: 期待値の線形性
+  requires: [prob.expectation]
+  source: Grinstead & Snell, Ch.6
+  why: |-
+    依存関係が複雑でも期待値だけは足し算で計算できる。指示変数と組み合わせると、ハッシュの衝突数・乱択アルゴリズムの計算量・テストで見つかるバグ数の見積もりが一行で出る。
+  statement: |-
+    $E[X], E[Y]$ が存在すれば、任意の定数 $a, b$ について
+    $$E[aX + bY] = aE[X] + bE[Y].$$
+    **独立性は不要**である。
+  proof:
+    - |-
+      離散の場合を示す。同時分布 $p(x, y) = P(X = x, Y = y)$ を使うと $E[X + Y] = \sum_{x, y} (x + y) p(x, y)$。
+    - |-
+      和を分けて $\sum_{x, y} x\, p(x, y) + \sum_{x, y} y\, p(x, y)$。
+    - |-
+      $\sum_y p(x, y) = P(X = x)$（周辺化）より、第1項は $\sum_x x P(X = x) = E[X]$、第2項は $E[Y]$。
+    - |-
+      定数倍 $E[aX] = aE[X]$ は定義から直ちに従う。
+  questions:
+    - q: |-
+        $E[XY] = E[X]E[Y]$ は常に成り立つか？
+      a: |-
+        成り立たない（独立なら成り立つ）。反例: $X$ が $\pm 1$ を確率 $1/2$ ずつとり $Y = X$ なら $E[XY] = E[X^2] = 1$ だが $E[X]E[Y] = 0$。
+    - q: |-
+        $n$ 人の帽子をランダムに配り直したとき、自分の帽子が戻る人数の期待値は？
+      a: |-
+        $1$。指示変数 $I_i$ =「$i$ が自分の帽子を受け取る」とすると $E[I_i] = 1/n$。線形性で $n \cdot 1/n = 1$（$I_i$ どうしは独立でないが関係ない）。
+
+- id: prob.balls-empty
+  kind: problem
+  subject: probability
+  title: 空箱の個数の期待値（計算）
+  requires: [prob.linearity]
+  generator: prob.balls-empty
+
+- id: prob.variance
+  kind: definition
+  subject: probability
+  title: 分散
+  requires: [prob.linearity]
+  source: Grinstead & Snell, Ch.6
+  statement: |-
+    $\mu = E[X]$ とするとき、$X$ の**分散**は
+    $$\operatorname{Var}(X) = E[(X - \mu)^2] = E[X^2] - \mu^2.$$
+    $X, Y$ が独立なら $\operatorname{Var}(X + Y) = \operatorname{Var}(X) + \operatorname{Var}(Y)$。
+  questions:
+    - q: |-
+        $E[(X - \mu)^2] = E[X^2] - \mu^2$ を示せ。
+      a: |-
+        展開して線形性: $E[X^2 - 2\mu X + \mu^2] = E[X^2] - 2\mu E[X] + \mu^2 = E[X^2] - \mu^2$。
+    - q: |-
+        $\operatorname{Var}(aX + b)$ は？
+      a: |-
+        $a^2 \operatorname{Var}(X)$。定数のずれ $b$ は分散に影響せず、倍率は2乗で効く。
+
+- id: prob.binomial
+  kind: problem
+  subject: probability
+  title: 二項分布の確率（計算）
+  requires: [prob.conditional, prob.expectation]
+  generator: prob.binomial-pmf
+
+- id: prob.markov-chebyshev
+  kind: theorem
+  subject: probability
+  title: マルコフの不等式・チェビシェフの不等式
+  requires: [prob.variance]
+  source: Grinstead & Snell, Ch.8
+  why: |-
+    分布の形が分からなくても、平均と分散だけで「外れ値になる確率」を上から押さえられる。アルゴリズムの「高確率で速い」の証明や、計測値の信頼性評価に使う。
+  statement: |-
+    **マルコフ**: $X \ge 0$, $a > 0$ ならば $P(X \ge a) \le \dfrac{E[X]}{a}$。
+
+    **チェビシェフ**: $\mu = E[X]$, $\sigma^2 = \operatorname{Var}(X) < \infty$ ならば、任意の $\varepsilon > 0$ で
+    $$P(|X - \mu| \ge \varepsilon) \le \frac{\sigma^2}{\varepsilon^2}.$$
+  proof:
+    - |-
+      $X \ge 0$ なので、各点で $X \ge a \cdot \mathbf{1}\{X \ge a\}$ が成り立つ。
+    - |-
+      両辺の期待値をとると $E[X] \ge a\, P(X \ge a)$。$a$ で割ればマルコフの不等式。
+    - |-
+      チェビシェフは $Y = (X - \mu)^2 \ge 0$ にマルコフを適用する: $P(Y \ge \varepsilon^2) \le E[Y]/\varepsilon^2 = \sigma^2/\varepsilon^2$。
+    - |-
+      $\{Y \ge \varepsilon^2\} = \{|X - \mu| \ge \varepsilon\}$ なので結論を得る。
+  questions:
+    - q: |-
+        マルコフの不等式で $X \ge 0$ の仮定を外すと何が起こるか？反例を挙げよ。
+      a: |-
+        成り立たない。$X$ が $-100$ と $1$ を確率 $1/2$ ずつとると $E[X] = -49.5$、$a = 1$ で $P(X \ge 1) = 1/2 > -49.5$。
+    - q: |-
+        「平均から $3\sigma$ 以上離れる確率」をチェビシェフで押さえよ。正規分布の場合と比べると？
+      a: |-
+        $\le 1/9 \approx 0.111$。正規分布なら約 $0.0027$。チェビシェフはどんな分布でも成り立つ代わりに粗い。
+
+- id: prob.wlln
+  kind: theorem
+  subject: probability
+  title: 大数の弱法則
+  requires: [prob.markov-chebyshev]
+  source: Grinstead & Snell, Ch.8
+  statement: |-
+    $X_1, X_2, \dots$ が独立同分布で $E[X_i] = \mu$, $\operatorname{Var}(X_i) = \sigma^2 < \infty$ とする。$\bar{X}_n = \frac{1}{n}\sum_{i=1}^n X_i$ とおくと、任意の $\varepsilon > 0$ で
+    $$P(|\bar{X}_n - \mu| \ge \varepsilon) \to 0 \quad (n \to \infty).$$
+  proof:
+    - |-
+      線形性より $E[\bar{X}_n] = \mu$。
+    - |-
+      独立性より分散は足せるので $\operatorname{Var}(\bar{X}_n) = \frac{1}{n^2} \cdot n\sigma^2 = \frac{\sigma^2}{n}$。
+    - |-
+      チェビシェフの不等式より $P(|\bar{X}_n - \mu| \ge \varepsilon) \le \dfrac{\sigma^2}{n \varepsilon^2}$。
+    - |-
+      右辺は $n \to \infty$ で $0$ に収束する。
+  questions:
+    - q: |-
+        独立性の仮定を外すと何が起こるか？反例を挙げよ。
+      a: |-
+        成り立たない。すべての $i$ で $X_i = X_1$（同じ値のコピー）なら $\bar{X}_n = X_1$ のままで、$X_1$ が定数でない限り $\mu$ に収束しない。
+    - q: |-
+        モンテカルロ法で誤差を半分にするには、サンプル数を何倍にすればよいか？
+      a: |-
+        4倍。標準偏差は $\sigma/\sqrt{n}$ なので、誤差は $1/\sqrt{n}$ でしか減らない。
+
+- id: prob.clt
+  kind: theorem
+  subject: probability
+  title: 中心極限定理
+  requires: [prob.wlln]
+  source: Grinstead & Snell, Ch.9
+  why: |-
+    多くの小さな独立な誤差の和はほぼ正規分布になる。信頼区間・検定・測定誤差の扱いがこれに支えられている。
+  statement: |-
+    $X_1, X_2, \dots$ が独立同分布で $E[X_i] = \mu$, $0 < \operatorname{Var}(X_i) = \sigma^2 < \infty$ ならば、$S_n = X_1 + \dots + X_n$ について
+    $$P\left(\frac{S_n - n\mu}{\sigma\sqrt{n}} \le x\right) \to \Phi(x) \quad (n \to \infty)$$
+    が任意の $x$ で成り立つ。$\Phi$ は標準正規分布の分布関数。
+  questions:
+    - q: |-
+        分散が有限という仮定を外すと何が起こるか？例を挙げよ。
+      a: |-
+        成り立たないことがある。独立同分布の標準コーシー分布の標本平均は、何個平均しても標準コーシー分布のままで、正規分布に近づかない（大数の法則すら成り立たない）。
+    - q: |-
+        サイコロを100回振った目の和は、およそどの範囲に95%の確率で入るか？
+      a: |-
+        $\mu = 3.5$, $\sigma^2 = 35/12$。和の平均 $350$、標準偏差 $\sqrt{100 \cdot 35/12} \approx 17.1$。およそ $350 \pm 1.96 \times 17.1 \approx [316, 384]$。
+
+- id: prob.birthday
+  kind: problem
+  subject: probability
+  title: 誕生日問題とハッシュ衝突（計算）
+  requires: [prob.conditional]
+  generator: prob.birthday

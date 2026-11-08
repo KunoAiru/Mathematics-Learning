@@ -1,0 +1,115 @@
+# 凸解析・最適化
+# 出典の章番号は Boyd & Vandenberghe, Convex Optimization（著者が無料公開）
+
+- id: cvx.convex-set
+  kind: definition
+  subject: convex
+  title: 凸集合
+  requires: [la.vector-space]
+  source: Boyd & Vandenberghe, Ch.2
+  statement: |-
+    $C \subseteq \mathbb{R}^n$ が**凸集合**であるとは、任意の $x, y \in C$ と $\theta \in [0, 1]$ について
+    $$\theta x + (1 - \theta) y \in C$$
+    が成り立つこと（2点を結ぶ線分が $C$ に含まれる）。
+  questions:
+    - q: |-
+        2つの凸集合の共通部分は凸か？和集合は？
+      a: |-
+        共通部分は凸（線分が両方に含まれるので）。和集合は一般に凸でない（離れた2つの円板など）。線形不等式 $Ax \le b$ の解集合が凸なのは、半空間の共通部分だから。
+
+- id: cvx.convex-function
+  kind: definition
+  subject: convex
+  title: 凸関数
+  requires: [cvx.convex-set]
+  source: Boyd & Vandenberghe, Ch.3
+  why: |-
+    凸関数の最小化は「局所解 = 大域解」になり、確実に解ける。機械学習の損失関数、制御のコスト関数、回路設計の多くは凸に定式化することで信頼できる解法が使える。
+  statement: |-
+    凸集合 $D$ 上の関数 $f: D \to \mathbb{R}$ が**凸**であるとは、任意の $x, y \in D$, $\theta \in [0, 1]$ について
+    $$f(\theta x + (1 - \theta) y) \le \theta f(x) + (1 - \theta) f(y)$$
+    が成り立つこと（グラフの弦がグラフより上にある）。2回微分可能なら、$f$ が凸 $\iff$ ヘッセ行列 $\nabla^2 f(x)$ がすべての $x$ で半正定値。
+  questions:
+    - q: |-
+        $f(x, y) = x^2 + xy + y^2$ は凸か？ヘッセ行列で判定せよ。
+      a: |-
+        凸。$\nabla^2 f = \begin{pmatrix} 2 & 1 \\ 1 & 2 \end{pmatrix}$ の固有値は $1, 3$ でともに正なので正定値（狭義凸）。
+    - q: |-
+        $f(x) = x^3$ は $\mathbb{R}$ 上で凸か？
+      a: |-
+        凸でない。$f''(x) = 6x$ は $x < 0$ で負。$[0, \infty)$ に制限すれば凸。
+
+- id: cvx.first-order
+  kind: theorem
+  subject: convex
+  title: 凸関数の1次条件
+  requires: [cvx.convex-function]
+  source: Boyd & Vandenberghe, Ch.3
+  statement: |-
+    $f$ が微分可能で定義域 $D$ が開凸集合のとき、
+    $$f \text{ が凸} \iff f(y) \ge f(x) + \nabla f(x)^\top (y - x) \quad (\forall x, y \in D).$$
+    つまり接平面はつねにグラフの下にある。特に $\nabla f(x^*) = 0$ ならば $x^*$ は大域最小点。
+  proof:
+    - |-
+      (⇒) 凸性より $0 < t \le 1$ で $f(x + t(y - x)) \le (1 - t) f(x) + t f(y)$。
+    - |-
+      移項して $t$ で割ると $f(y) \ge f(x) + \dfrac{f(x + t(y - x)) - f(x)}{t}$。
+    - |-
+      $t \to 0^+$ とすると、右辺の差分商は方向微分 $\nabla f(x)^\top (y - x)$ に収束する。
+    - |-
+      (⇐) $z = \theta x + (1 - \theta) y$ とおき、不等式を点 $z$ で $x$ と $y$ に対して使う: $f(x) \ge f(z) + \nabla f(z)^\top (x - z)$, $f(y) \ge f(z) + \nabla f(z)^\top (y - z)$。
+    - |-
+      それぞれ $\theta$, $1 - \theta$ 倍して足すと、$\theta(x - z) + (1 - \theta)(y - z) = 0$ より $\theta f(x) + (1 - \theta) f(y) \ge f(z)$。
+  questions:
+    - q: |-
+        凸でない関数で $\nabla f(x^*) = 0$ でも最小点でない例を挙げよ。
+      a: |-
+        $f(x) = x^3$ の $x = 0$（停留点だが最小でも極小でもない）や、$f(x, y) = x^2 - y^2$ の原点（鞍点）。ニューラルネットの学習で勾配が $0$ でも安心できない理由。
+
+- id: cvx.gradient-quadratic
+  kind: problem
+  subject: convex
+  title: 2次関数の勾配（計算）
+  requires: [cvx.convex-function]
+  generator: cvx.gradient-quadratic
+
+- id: cvx.gd-step
+  kind: problem
+  subject: convex
+  title: 勾配降下法の1ステップ（計算）
+  requires: [cvx.first-order]
+  generator: cvx.gd-step
+
+- id: cvx.weak-duality
+  kind: theorem
+  subject: convex
+  title: 弱双対性
+  requires: [cvx.first-order]
+  source: Boyd & Vandenberghe, Ch.5
+  why: |-
+    双対問題の値は、元の問題の最適値の「下界（保証）」になる。最適化ソルバーが「これ以上良い解はない」と証明できる仕組みであり、SVM や制約付き最適化の理論の柱。
+  statement: |-
+    問題 $\min f_0(x)$ s.t. $f_i(x) \le 0$ ($i = 1, \dots, m$), $h_j(x) = 0$ の最適値を $p^*$ とする。ラグランジュ関数
+    $$L(x, \lambda, \nu) = f_0(x) + \sum_i \lambda_i f_i(x) + \sum_j \nu_j h_j(x)$$
+    と双対関数 $g(\lambda, \nu) = \inf_x L(x, \lambda, \nu)$ について、$\lambda \ge 0$ ならば $g(\lambda, \nu) \le p^*$。
+    （凸性は不要。）
+  proof:
+    - |-
+      実行可能な $\tilde{x}$（$f_i(\tilde x) \le 0$, $h_j(\tilde x) = 0$）を任意にとる。
+    - |-
+      $\lambda_i \ge 0$, $f_i(\tilde{x}) \le 0$ より $\sum_i \lambda_i f_i(\tilde{x}) \le 0$。また $\sum_j \nu_j h_j(\tilde x) = 0$。
+    - |-
+      よって $L(\tilde{x}, \lambda, \nu) \le f_0(\tilde{x})$。
+    - |-
+      $g(\lambda, \nu) = \inf_x L(x, \lambda, \nu) \le L(\tilde x, \lambda, \nu) \le f_0(\tilde{x})$。
+    - |-
+      実行可能な $\tilde{x}$ について下限をとれば $g(\lambda, \nu) \le p^*$。
+  questions:
+    - q: |-
+        $\lambda \ge 0$ の仮定を外すと何が起こるか？反例を挙げよ。
+      a: |-
+        成り立たない。$\min x^2$ s.t. $x - 1 \le 0$ の最適値は $p^* = 0$。$L = x^2 + \lambda(x - 1)$ より $g(\lambda) = -\lambda^2/4 - \lambda$。$\lambda = -2$ では $g = 1 > p^*$。
+    - q: |-
+        強双対性 $\max g = p^*$ が成り立つための代表的な十分条件は？
+      a: |-
+        凸問題でスレーター条件（$f_i(x) < 0$ を厳密に満たす実行可能点が存在する）が成り立つこと。

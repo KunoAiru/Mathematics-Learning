@@ -1,0 +1,191 @@
+# 線形代数 2: 行列式・固有値・内積
+
+- id: la.det-invertible
+  kind: theorem
+  subject: linear-algebra
+  title: 行列式と可逆性
+  requires: [la.rank-nullity]
+  source: Axler LADR 4e, Ch.9
+  why: |-
+    数値計算で「この連立方程式は解けるか」「ヤコビアンが退化していないか」を判定する基本。行列式が 0 に近いと数値的に不安定になる（ただし大きさの目安には条件数を使う）。
+  statement: |-
+    $A$ を $n \times n$ 行列とするとき、次は同値:
+
+    1. $A$ は可逆
+    2. $\det A \ne 0$
+    3. $A$ の列ベクトルは1次独立
+    4. $Ax = 0$ の解は $x = 0$ のみ
+  proof:
+    - |-
+      (1 ⇒ 2) $AA^{-1} = I$ と積の公式 $\det(AB) = \det A \det B$ から $\det A \cdot \det A^{-1} = 1$。よって $\det A \ne 0$。
+    - |-
+      (2 ⇒ 3) 対偶を示す。列が1次従属なら、ある列が他の列の線形結合で書ける。
+    - |-
+      行列式は各列について線形（多重線形）なので、その列を展開すると「同じ列を2本含む行列式」の和になる。
+    - |-
+      同じ列を2本含む行列式は交代性により $0$。よって $\det A = 0$。
+    - |-
+      (3 ⇔ 4) $Ax = x_1 a_1 + \dots + x_n a_n$（$a_j$ は列）なので、列の1次独立性は「$Ax = 0 \Rightarrow x = 0$」そのもの。
+    - |-
+      (4 ⇒ 1) $\operatorname{null} A = \{0\}$ と次元定理から $\dim \operatorname{range} A = n$、つまり全射。単射かつ全射なので可逆。
+  questions:
+    - q: |-
+        $\det(A + B) = \det A + \det B$ は一般に成り立つか？
+      a: |-
+        成り立たない。例: $A = B = I_2$ なら $\det(2I) = 4$ だが $\det I + \det I = 2$。成り立つのは積 $\det(AB) = \det A \det B$ のほう。
+    - q: |-
+        $\det(cA)$ を $\det A$ で表せ（$A$ は $n \times n$）。
+      a: |-
+        $c^n \det A$。各列に $c$ がかかり、多重線形性で $c$ が $n$ 個出てくる。
+
+- id: la.det-3x3
+  kind: problem
+  subject: linear-algebra
+  title: 3×3 行列式（計算）
+  requires: [la.det-invertible]
+  generator: la.det-3x3
+
+- id: la.inverse-2x2
+  kind: problem
+  subject: linear-algebra
+  title: 2×2 逆行列（計算）
+  requires: [la.det-invertible]
+  generator: la.inverse-2x2
+
+- id: la.eigen
+  kind: definition
+  subject: linear-algebra
+  title: 固有値と固有ベクトル
+  requires: [la.null-range]
+  source: Axler LADR 4e, Ch.5
+  why: |-
+    振動の固有振動数、マルコフ連鎖の定常分布、PageRank、主成分分析、反復法の収束速度。「その写像で方向が変わらないベクトル」を見つけると、多くの問題が対角行列の問題に帰着する。
+  statement: |-
+    線形写像 $T: V \to V$ について、$\lambda \in \mathbb{F}$ が $T$ の**固有値**であるとは、
+    $$Tv = \lambda v \quad \text{かつ} \quad v \ne 0$$
+    を満たす $v \in V$ が存在すること。このような $v$ を固有値 $\lambda$ の**固有ベクトル**という。
+    同値な言い換え: $\operatorname{null}(T - \lambda I) \ne \{0\}$。行列なら $\det(\lambda I - A) = 0$。
+  questions:
+    - q: |-
+        定義で「$v \ne 0$」を外すと何がまずいか？
+      a: |-
+        $v = 0$ なら任意の $\lambda$ で $T0 = \lambda 0$ が成り立つので、すべての数が固有値になってしまい意味をなさない。
+    - q: |-
+        $\mathbb{R}^2$ の $90^\circ$ 回転 $\begin{pmatrix} 0 & -1 \\ 1 & 0 \end{pmatrix}$ の実固有値は？
+      a: |-
+        存在しない。特性多項式 $\lambda^2 + 1$ は実数解をもたない（複素数では $\pm i$）。回転で方向が変わらない実ベクトルはない。
+
+- id: la.eigen-independent
+  kind: theorem
+  subject: linear-algebra
+  title: 異なる固有値の固有ベクトルは1次独立
+  requires: [la.eigen, la.linear-independence]
+  source: Axler LADR 4e, Ch.5
+  statement: |-
+    $\lambda_1, \dots, \lambda_m$ が $T$ の相異なる固有値で、$v_1, \dots, v_m$ が対応する固有ベクトルならば、$v_1, \dots, v_m$ は1次独立である。
+  proof:
+    - |-
+      背理法。1次従属と仮定し、$v_k \in \operatorname{span}(v_1, \dots, v_{k-1})$ となる最小の $k$ をとる（$v_1, \dots, v_{k-1}$ は1次独立）。
+    - |-
+      $v_k = a_1 v_1 + \dots + a_{k-1} v_{k-1}$ と書く。
+    - |-
+      両辺に $T$ をかけると $\lambda_k v_k = a_1 \lambda_1 v_1 + \dots + a_{k-1} \lambda_{k-1} v_{k-1}$。
+    - |-
+      元の式の $\lambda_k$ 倍を引くと $0 = a_1(\lambda_1 - \lambda_k) v_1 + \dots + a_{k-1}(\lambda_{k-1} - \lambda_k) v_{k-1}$。
+    - |-
+      $v_1, \dots, v_{k-1}$ の1次独立性と $\lambda_i \ne \lambda_k$ から、すべての $a_i = 0$。
+    - |-
+      すると $v_k = 0$ となり、固有ベクトルであることに矛盾する。
+  questions:
+    - q: |-
+        「固有値が相異なる」という仮定を外すとどうなるか？反例を挙げよ。
+      a: |-
+        成り立たない。$T = I$（恒等写像）では $v$ と $2v$ はともに固有値 $1$ の固有ベクトルだが1次従属。
+    - q: |-
+        この定理から、$n \times n$ 行列の固有値について何が言えるか？
+      a: |-
+        相異なる固有値は高々 $n$ 個。さらに $n$ 個の相異なる固有値をもてば、固有ベクトルが基底をなすので対角化可能。
+
+- id: la.eigen-2x2
+  kind: problem
+  subject: linear-algebra
+  title: 2×2 固有値（計算）
+  requires: [la.eigen]
+  generator: la.eigen-2x2
+
+- id: la.inner-product
+  kind: definition
+  subject: linear-algebra
+  title: 内積とノルム
+  requires: [la.vector-space]
+  source: Axler LADR 4e, Ch.6
+  statement: |-
+    実ベクトル空間 $V$ 上の**内積**とは、写像 $\langle \cdot, \cdot \rangle: V \times V \to \mathbb{R}$ で次を満たすもの:
+
+    1. 正値性 $\langle v, v \rangle \ge 0$、かつ $\langle v, v \rangle = 0 \iff v = 0$
+    2. 第1引数について線形 $\langle au + bw, v \rangle = a\langle u, v\rangle + b\langle w, v \rangle$
+    3. 対称性 $\langle u, v \rangle = \langle v, u \rangle$（複素なら $\overline{\langle v, u \rangle}$）
+
+    **ノルム**は $\|v\| = \sqrt{\langle v, v \rangle}$。$\langle u, v \rangle = 0$ のとき $u, v$ は**直交**するという。
+  questions:
+    - q: |-
+        $\mathbb{R}^2$ 上で $\langle x, y \rangle = x_1 y_1 - x_2 y_2$ は内積か？
+      a: |-
+        ちがう。$x = (0, 1)$ で $\langle x, x \rangle = -1 < 0$ となり正値性が崩れる（これは相対論のミンコフスキー計量の形）。
+
+- id: la.cauchy-schwarz
+  kind: theorem
+  subject: linear-algebra
+  title: コーシー・シュワルツの不等式
+  requires: [la.inner-product]
+  source: Axler LADR 4e, Ch.6
+  why: |-
+    相関係数が $[-1, 1]$ に入る理由、コサイン類似度、三角不等式、確率の $|E[XY]|^2 \le E[X^2]E[Y^2]$ など、あらゆる「上から押さえる」議論の出発点。
+  statement: |-
+    内積空間の任意の $u, v$ について
+    $$|\langle u, v \rangle| \le \|u\|\,\|v\|.$$
+    等号は $u, v$ の一方が他方のスカラー倍のときに限る。
+  proof:
+    - |-
+      $v = 0$ なら両辺 $0$ で成り立つ。以下 $v \ne 0$ とする。
+    - |-
+      $u = \dfrac{\langle u, v \rangle}{\|v\|^2} v + w$ と分解すると、$w = u - \dfrac{\langle u, v \rangle}{\|v\|^2} v$ は $v$ と直交する（内積を計算して確かめる）。
+    - |-
+      ピタゴラスの定理より $\|u\|^2 = \dfrac{|\langle u, v \rangle|^2}{\|v\|^2} + \|w\|^2 \ge \dfrac{|\langle u, v \rangle|^2}{\|v\|^2}$。
+    - |-
+      両辺に $\|v\|^2$ をかけて平方根をとれば結論。等号は $w = 0$、つまり $u$ が $v$ のスカラー倍のとき。
+
+- id: la.spectral
+  kind: theorem
+  subject: linear-algebra
+  title: 実対称行列のスペクトル定理
+  requires: [la.eigen-independent, la.cauchy-schwarz]
+  source: Axler LADR 4e, Ch.7
+  why: |-
+    共分散行列・ヘッセ行列・グラフラプラシアンはすべて実対称。この定理により「直交する軸に沿って伸び縮みするだけ」と分かり、主成分分析・2次形式の正定値判定・最適化の2階条件の基礎になる。
+  statement: |-
+    $A \in \mathbb{R}^{n \times n}$ が $A^\top = A$ を満たすならば、直交行列 $Q$（$Q^\top Q = I$）と実対角行列 $\Lambda$ が存在して
+    $$A = Q \Lambda Q^\top.$$
+    すなわち $A$ の固有値はすべて実数で、固有ベクトルからなる正規直交基底がとれる。
+  proof:
+    - |-
+      特性多項式は $\mathbb{C}$ で根をもつので、$Av = \lambda v$ となる $\lambda \in \mathbb{C}$, $v \in \mathbb{C}^n \setminus \{0\}$ をとる。
+    - |-
+      $\bar{v}^\top A v$ を2通りに見る。まず $\bar{v}^\top A v = \lambda \bar{v}^\top v = \lambda \|v\|^2$。一方 $A$ は実対称なので $\overline{\bar{v}^\top A v} = v^\top A \bar{v} = (v^\top A \bar{v})^\top = \bar{v}^\top A v$ となり、これは実数。よって $\lambda = \bar{v}^\top A v / \|v\|^2 \in \mathbb{R}$。
+    - |-
+      $\lambda$ が実数なので $A - \lambda I$ は実行列で、実の固有ベクトル $q_1$（$\|q_1\| = 1$）がとれる。
+    - |-
+      $W = q_1^\perp$ は $A$ で不変: $w \perp q_1$ なら $\langle Aw, q_1 \rangle = \langle w, A q_1 \rangle = \lambda \langle w, q_1 \rangle = 0$（対称性を使う）。
+    - |-
+      $A$ を $W$（$n-1$ 次元）に制限したものも対称なので、$n$ に関する帰納法で $W$ の正規直交固有基底 $q_2, \dots, q_n$ がとれる。
+    - |-
+      $Q = (q_1, \dots, q_n)$ とおけば $AQ = Q\Lambda$、すなわち $A = Q\Lambda Q^\top$。
+  questions:
+    - q: |-
+        対称性の仮定を外すと何が起こるか？反例を挙げよ。
+      a: |-
+        実固有値すら存在しないことがある。$90^\circ$ 回転 $\begin{pmatrix} 0 & -1 \\ 1 & 0 \end{pmatrix}$ の固有値は $\pm i$。また $\begin{pmatrix} 1 & 1 \\ 0 & 1 \end{pmatrix}$ は固有値 $1$ のみで固有ベクトルが1方向しかなく、対角化できない。
+    - q: |-
+        対称行列 $A$ が正定値（$x^\top A x > 0$, $x \ne 0$）であることを固有値で言い換えよ。
+      a: |-
+        すべての固有値が正。$x = Qy$ とおくと $x^\top A x = y^\top \Lambda y = \sum \lambda_i y_i^2$ となるため。

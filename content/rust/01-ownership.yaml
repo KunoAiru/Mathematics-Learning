@@ -1,0 +1,197 @@
+# Rust: 所有権と借用 — コンパイラがメモリ安全性を証明する
+# 出典: The Rust Programming Language（無料公開）
+
+- id: rust.ownership
+  kind: definition
+  subject: rust
+  title: 所有権の規則
+  requires: []
+  source: The Rust Programming Language, Ch.4.1
+  why: |-
+    Rust はガベージコレクタなしで use-after-free や二重解放をコンパイル時に排除する。その仕組みの中心が所有権。C++ の RAII とムーブを言語の規則にしたもの。
+  statement: |-
+    1. Rust の各値には**所有者**と呼ばれる変数がある。
+    2. 所有者は同時に1つだけ。
+    3. 所有者がスコープを抜けると、値は破棄（drop）される。
+
+    代入や関数への受け渡しでは、`Copy` でない型（`String`, `Vec` など）は所有権が**ムーブ**し、元の変数は使えなくなる。
+  questions:
+    - q: |-
+        `i32` を代入しても元の変数が使えるのに、`String` では使えなくなるのはなぜか？
+      a: |-
+        `i32` は `Copy` トレイトを実装していて、代入でビット列がコピーされるだけ。`String` はヒープ領域を所有しているので、コピーすると2つの所有者が同じ領域を解放しようとして二重解放になる。だから所有権を移す（ムーブ）。複製したいときは `.clone()` を明示する。
+
+- id: rust.move
+  kind: code
+  subject: rust
+  title: ムーブ後の使用
+  requires: [rust.ownership]
+  source: The Rust Programming Language, Ch.4.1
+  lang: rust
+  code: |
+    fn main() {
+        let s = String::from("hello");
+        let t = s;
+        println!("{} {}", s, t);
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - hello hello と出力される
+      - コンパイルエラー（ムーブ済みの値を使用）
+      - 実行時にパニックする
+    value: 1
+  explanation: |-
+    `let t = s;` で所有権が `t` へムーブし、`s` は無効になる。`s` を使うとエラー E0382（borrow of moved value）。
+    C++ なら `std::move` 後のオブジェクトを使ってもコンパイルは通る（中身は「有効だが未規定の状態」）。Rust はこれを型検査で禁止する。
+  verify:
+    build: error
+
+- id: rust.borrow
+  kind: definition
+  subject: rust
+  title: 借用の規則
+  requires: [rust.ownership]
+  source: The Rust Programming Language, Ch.4.2
+  statement: |-
+    所有権を移さずに値を参照することを**借用**という。どの時点でも、次のどちらか一方だけが許される:
+
+    - 不変参照 `&T` がいくつでも
+    - 可変参照 `&mut T` がちょうど1つ
+
+    また、参照は参照先より長く生きてはならない（ライフタイム）。
+  questions:
+    - q: |-
+        「共有するなら変更しない、変更するなら共有しない」という規則が防ぐバグを2つ挙げよ。
+      a: |-
+        データ競合（複数スレッドが同時に書く）と、反復中のコレクション変更によるイテレータ無効化（use-after-free）。どちらも C++ では未定義動作になる。
+
+- id: rust.borrow-conflict
+  kind: code
+  subject: rust
+  title: 借用の衝突（C++ の無効化バグとの比較）
+  requires: [rust.borrow]
+  source: The Rust Programming Language, Ch.8.1
+  lang: rust
+  code: |
+    fn main() {
+        let mut v = vec![1, 2, 3];
+        let first = &v[0];
+        v.push(4);
+        println!("{}", first);
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "1 と出力される"
+      - コンパイルエラー（不変借用中に可変借用している）
+      - 実行時にパニックする
+      - 未定義動作
+    value: 1
+  explanation: |-
+    `first` が `v` を不変借用している間に、`v.push(4)` が `v` を可変借用しようとするのでエラー E0502。
+    `push` で再確保が起きると `first` はダングリングになりうる。C++ では同じコードがコンパイルを通って未定義動作になる（C++ の「イテレータ・参照の無効化」カード）。Rust は借用規則でこれを未然に防ぐ。
+  verify:
+    build: error
+
+- id: rust.overflow
+  kind: code
+  subject: rust
+  title: 整数オーバーフロー
+  requires: [rust.ownership]
+  source: The Rust Programming Language, Ch.3.2
+  lang: rust
+  code: |
+    fn inc(x: u8) -> u8 {
+        x + 1
+    }
+
+    fn main() {
+        println!("{}", inc(255));
+    }
+  prompt: |-
+    `cargo run`（debug ビルド）と `cargo run --release` でそれぞれどうなるか？
+  answer:
+    type: choice
+    choices:
+      - どちらも 0
+      - どちらも 256
+      - debug ではパニック、release では 0（2の補数で回り込み）
+      - どちらもコンパイルエラー
+    value: 2
+  explanation: |-
+    debug ビルドでは整数オーバーフローを検査して `attempt to add with overflow` でパニックする。release では既定で検査を省き、$2^8$ を法として回り込む（UB ではなく定義された動作）。
+    意図を明示するには `x.wrapping_add(1)`、`x.checked_add(1)`（`Option` を返す）、`x.saturating_add(1)`、`x.overflowing_add(1)` を使う。暗号や数値計算のコードでは回り込みを明示するのが定石。
+  verify:
+    build: ok
+    panics: true
+
+- id: rust.option-result
+  kind: definition
+  subject: rust
+  title: Option と Result
+  requires: [rust.ownership]
+  source: The Rust Programming Language, Ch.6, Ch.9
+  statement: |-
+    `Option<T>` は値が「あるかもしれない（`Some(T)`）／ない（`None`）」を表す列挙型。ヌルポインタの代わり。
+    `Result<T, E>` は「成功（`Ok(T)`）／失敗（`Err(E)`）」を表す列挙型。例外の代わり。
+    どちらも `match` で場合分けしないと中身を取り出せないので、確認漏れが型エラーになる。`?` 演算子でエラーを呼び出し元へ伝播できる。
+  questions:
+    - q: |-
+        `unwrap()` を乱用すると何が起きるか？代わりに何を使うべきか？
+      a: |-
+        `None` / `Err` のときにパニックしてプログラムが止まる。ライブラリや入力処理では `?` で伝播する、`match` / `if let` で処理する、`unwrap_or` で既定値を使う。`expect("理由")` なら少なくとも原因が分かる。
+
+- id: rust.modpow
+  kind: exercise
+  subject: rust
+  title: 繰り返し二乗法でべき乗剰余を実装する
+  requires: [rust.overflow, alg.fermat]
+  source: 暗号実装の基本アルゴリズム
+  lang: rust
+  prompt: |-
+    $a^e \bmod m$ を $O(\log e)$ 回の掛け算で計算する関数 `mod_pow` を書け。$m < 2^{64}$ のすべての値で正しく動くこと（掛け算のオーバーフローに注意）。
+    フェルマーの小定理で検算しよう: 素数 $p$ と $p \nmid a$ について `mod_pow(a, p - 1, p) == 1`。
+  starter: |
+    fn mod_pow(base: u64, exp: u64, m: u64) -> u64 {
+        // TODO: e を2進展開し、二乗と掛け算を繰り返す
+        // ヒント: u64 同士の積は u128 で計算する
+        todo!()
+    }
+
+    fn main() {
+        assert_eq!(mod_pow(2, 10, 1000), 24);
+        assert_eq!(mod_pow(3, 0, 7), 1);
+        assert_eq!(mod_pow(5, 3, 1), 0);
+        let p: u64 = 1_000_000_007;
+        assert_eq!(mod_pow(123_456_789, p - 1, p), 1);
+        let big: u64 = 18_446_744_073_709_551_557; // 2^64 未満の最大の素数
+        assert_eq!(mod_pow(2, big - 1, big), 1);
+        println!("all tests passed");
+    }
+  solution: |
+    fn mod_pow(base: u64, mut exp: u64, m: u64) -> u64 {
+        if m == 1 {
+            return 0;
+        }
+        let m128 = m as u128;
+        let mut result: u128 = 1;
+        let mut b: u128 = base as u128 % m128;
+        while exp > 0 {
+            if exp & 1 == 1 {
+                result = result * b % m128;
+            }
+            b = b * b % m128;
+            exp >>= 1;
+        }
+        result as u64
+    }
+  checklist:
+    - すべての assert が通った
+    - m = 1 のとき 0 を返す（1 % 1 = 0）
+    - u64 のまま掛けると大きな m でオーバーフローすることを確かめた（debug ではパニック）
+    - ループ回数が exp のビット数程度であることを説明できる

@@ -1,0 +1,167 @@
+# 線形代数 1: ベクトル空間と線形写像
+# 出典の章番号は Axler, Linear Algebra Done Right 4th ed.（オープンアクセス）
+
+- id: la.vector-space
+  kind: definition
+  subject: linear-algebra
+  title: ベクトル空間
+  requires: []
+  source: Axler LADR 4e, Ch.1
+  why: |-
+    信号・画像・多項式・確率分布の差など、「足せて定数倍できるもの」をまとめて扱う枠組み。研究で出てくる関数空間もこの定義の上に立つ。
+  statement: |-
+    体 $\mathbb{F}$（$\mathbb{R}$ や $\mathbb{C}$）上の**ベクトル空間**とは、集合 $V$ と加法 $V \times V \to V$、スカラー倍 $\mathbb{F} \times V \to V$ の組で、すべての $u, v, w \in V$, $a, b \in \mathbb{F}$ について次を満たすもの:
+
+    1. 可換性 $u + v = v + u$
+    2. 結合性 $(u + v) + w = u + (v + w)$, $(ab)v = a(bv)$
+    3. 加法単位元 $0 \in V$ が存在し $v + 0 = v$
+    4. 加法逆元: 各 $v$ に $w$ が存在し $v + w = 0$
+    5. 乗法単位元 $1v = v$
+    6. 分配法則 $a(u + v) = au + av$, $(a + b)v = av + bv$
+  questions:
+    - q: |-
+        $\{(x, y) \in \mathbb{R}^2 : x \ge 0\}$（右半平面）は通常の演算で $\mathbb{R}$ 上のベクトル空間か？
+      a: |-
+        ちがう。$(1, 0)$ の加法逆元 $(-1, 0)$ が集合に入らない（スカラー倍 $(-1)\cdot(1,0)$ で外に出る）。部分空間かどうかは「$0$ を含む・加法で閉じる・スカラー倍で閉じる」の3つを確かめればよい。
+    - q: |-
+        $V$ のゼロベクトルがただ1つであることを示せ。
+      a: |-
+        $0, 0'$ がともに加法単位元なら $0' = 0' + 0 = 0 + 0' = 0$（1つめは $0$ が単位元、2つめは可換性、3つめは $0'$ が単位元であることを使う）。
+
+- id: la.span
+  kind: definition
+  subject: linear-algebra
+  title: 線形結合と張る空間（span）
+  requires: [la.vector-space]
+  source: Axler LADR 4e, Ch.2
+  statement: |-
+    $v_1, \dots, v_m \in V$ の**線形結合**とは $a_1 v_1 + \dots + a_m v_m$（$a_i \in \mathbb{F}$）の形のベクトル。
+    その全体を $\operatorname{span}(v_1, \dots, v_m)$ と書き、$v_1, \dots, v_m$ が**張る空間**という。これは $v_1,\dots,v_m$ を含む最小の部分空間である。
+  questions:
+    - q: |-
+        $\operatorname{span}((1, 1), (2, 2))$ は $\mathbb{R}^2$ のどんな部分集合か？
+      a: |-
+        直線 $\{t(1, 1) : t \in \mathbb{R}\}$。$(2,2)$ は $(1,1)$ の定数倍なので新しい方向を加えない。
+
+- id: la.linear-independence
+  kind: definition
+  subject: linear-algebra
+  title: 1次独立
+  requires: [la.span]
+  source: Axler LADR 4e, Ch.2
+  why: |-
+    「冗長な情報がない」ことの数学的な表現。特徴量の多重共線性、連立方程式の解の一意性、誤り訂正符号の設計などに直結する。
+  statement: |-
+    $v_1, \dots, v_m \in V$ が**1次独立**であるとは、
+    $$a_1 v_1 + \dots + a_m v_m = 0 \implies a_1 = \dots = a_m = 0$$
+    が成り立つこと。そうでないとき**1次従属**という。
+  questions:
+    - q: |-
+        1次従属であることと同値な言い換えを1つ述べよ。
+      a: |-
+        ある $v_k$ が他のベクトルの線形結合で書ける（$v_k \in \operatorname{span}(v_1, \dots, v_{k-1}, v_{k+1}, \dots, v_m)$）。さらに強く、ある $k$ について $v_k \in \operatorname{span}(v_1, \dots, v_{k-1})$ となる（Axler の線形従属補題）。
+    - q: |-
+        ゼロベクトルを含むリストは1次独立になりうるか？
+      a: |-
+        ならない。$v_1 = 0$ なら $1\cdot v_1 = 0$ で係数が全部 $0$ でない線形結合が $0$ になる。
+
+- id: la.basis-dimension
+  kind: definition
+  subject: linear-algebra
+  title: 基底と次元
+  requires: [la.linear-independence]
+  source: Axler LADR 4e, Ch.2
+  statement: |-
+    $V$ の**基底**とは、1次独立で $V$ を張るベクトルのリスト。
+    有限次元ベクトル空間では基底の長さはどれも等しく、それを $V$ の**次元** $\dim V$ という。
+    基底 $v_1, \dots, v_n$ があると、各 $v \in V$ は $v = a_1 v_1 + \dots + a_n v_n$ と**ただ1通りに**書ける（座標）。
+  questions:
+    - q: |-
+        「基底の長さはどれも等しい」の証明の鍵になる不等式は何か？
+      a: |-
+        有限次元空間では「1次独立なリストの長さ ≤ 張るリストの長さ」。基底 $B_1, B_2$ について、$B_1$ は独立で $B_2$ は張るので $|B_1| \le |B_2|$、逆も同様で等号。
+    - q: |-
+        $n$ 次以下の実係数多項式全体 $\mathcal{P}_n(\mathbb{R})$ の次元は？
+      a: |-
+        $n + 1$。基底 $1, x, x^2, \dots, x^n$。
+
+- id: la.linear-map
+  kind: definition
+  subject: linear-algebra
+  title: 線形写像
+  requires: [la.vector-space]
+  source: Axler LADR 4e, Ch.3
+  why: |-
+    微分・積分・フーリエ変換・畳み込み・行列の掛け算はすべて線形写像。線形性があると「部品ごとに計算して足す」ことができる（重ね合わせの原理）。
+  statement: |-
+    $V, W$ を $\mathbb{F}$ 上のベクトル空間とする。写像 $T: V \to W$ が**線形**であるとは、すべての $u, v \in V$, $\lambda \in \mathbb{F}$ について
+    $$T(u + v) = Tu + Tv, \qquad T(\lambda v) = \lambda\, Tv$$
+    が成り立つこと。基底を固定すると、線形写像は行列で表される。
+  questions:
+    - q: |-
+        $T: \mathbb{R} \to \mathbb{R}$, $T(x) = 2x + 1$ は線形写像か？
+      a: |-
+        ちがう。線形写像なら $T(0) = 0$ でなければならない（$T(0) = T(0 + 0) = 2T(0)$ より）。$T(0) = 1$ なので線形でない（アフィン写像）。
+
+- id: la.null-range
+  kind: definition
+  subject: linear-algebra
+  title: 核と像
+  requires: [la.linear-map]
+  source: Axler LADR 4e, Ch.3
+  statement: |-
+    線形写像 $T: V \to W$ について
+    $$\operatorname{null} T = \{ v \in V : Tv = 0 \}, \qquad \operatorname{range} T = \{ Tv : v \in V \}$$
+    をそれぞれ $T$ の**核**（零空間）、**像**という。どちらも部分空間で、
+    $T$ が単射 $\iff \operatorname{null} T = \{0\}$ が成り立つ。
+  questions:
+    - q: |-
+        「$T$ が単射 $\iff \operatorname{null} T = \{0\}$」の $\Leftarrow$ を示せ。
+      a: |-
+        $Tu = Tv$ とすると線形性から $T(u - v) = 0$、つまり $u - v \in \operatorname{null} T = \{0\}$。よって $u = v$。
+
+- id: la.rank-nullity
+  kind: theorem
+  subject: linear-algebra
+  title: 次元定理（階数・退化次数の定理）
+  requires: [la.basis-dimension, la.null-range]
+  source: Axler LADR 4e, Ch.3（Fundamental Theorem of Linear Maps）
+  why: |-
+    「方程式 $Ax = b$ の解がいくつ自由度を持つか」を一発で教えてくれる。制約の数と未知数の数から解空間の次元を見積もるのは、回路解析や構造解析の基本操作。
+  statement: |-
+    $V$ が有限次元で $T: V \to W$ が線形写像ならば、$\operatorname{range} T$ も有限次元で
+    $$\dim V = \dim \operatorname{null} T + \dim \operatorname{range} T.$$
+  proof:
+    - |-
+      $\operatorname{null} T$ の基底 $u_1, \dots, u_m$ をとる。
+    - |-
+      それを延長して $V$ の基底 $u_1, \dots, u_m, v_1, \dots, v_n$ を作る（$\dim V = m + n$）。
+    - |-
+      任意の $v \in V$ を基底で展開して $T$ をかけると、$Tu_i = 0$ なので $Tv \in \operatorname{span}(Tv_1, \dots, Tv_n)$。よって $Tv_1, \dots, Tv_n$ は $\operatorname{range} T$ を張る。
+    - |-
+      $c_1 Tv_1 + \dots + c_n Tv_n = 0$ とすると $\sum c_j v_j \in \operatorname{null} T$ なので $\sum c_j v_j = \sum d_i u_i$ と書ける。基底の1次独立性からすべての $c_j = 0$。よって $Tv_1, \dots, Tv_n$ は1次独立。
+    - |-
+      以上より $\dim \operatorname{range} T = n$ で、$\dim V = m + n = \dim \operatorname{null} T + \dim \operatorname{range} T$。
+  questions:
+    - q: |-
+        $A$ を $3 \times 5$ 行列とする。$Ax = 0$ の解空間の次元は少なくともいくつか？
+      a: |-
+        $2$ 以上。$\dim \operatorname{range} A \le 3$（値域は $\mathbb{R}^3$ の部分空間）なので $\dim \operatorname{null} A = 5 - \dim \operatorname{range} A \ge 2$。未知数が式より多いと必ず非自明解がある。
+    - q: |-
+        $\dim V > \dim W$ のとき、線形写像 $T: V \to W$ が単射になりえない理由を述べよ。
+      a: |-
+        $\dim \operatorname{null} T = \dim V - \dim \operatorname{range} T \ge \dim V - \dim W > 0$ なので $\operatorname{null} T \ne \{0\}$。
+
+- id: la.matmul-2x2
+  kind: problem
+  subject: linear-algebra
+  title: 行列の積（計算）
+  requires: [la.linear-map]
+  generator: la.matmul-2x2
+
+- id: la.rank-3x4
+  kind: problem
+  subject: linear-algebra
+  title: 行列の階数（計算）
+  requires: [la.rank-nullity]
+  generator: la.rank-3x4

@@ -1,0 +1,153 @@
+# 抽象代数学
+# 出典の章番号は Judson, Abstract Algebra: Theory and Applications（無料公開）
+
+- id: alg.group
+  kind: definition
+  subject: algebra
+  title: 群
+  requires: []
+  source: Judson AATA, Ch.3
+  why: |-
+    「対称性」と「可逆な操作の組み合わせ」の言語。公開鍵暗号（RSA・楕円曲線）、誤り訂正符号、ルービックキューブ、結晶構造、量子計算の基礎。
+  statement: |-
+    **群**とは集合 $G$ と二項演算 $\cdot : G \times G \to G$ の組で、次を満たすもの:
+
+    1. 結合法則 $(ab)c = a(bc)$
+    2. 単位元 $e$ が存在し、すべての $a$ で $ea = ae = a$
+    3. 各 $a$ に逆元 $a^{-1}$ が存在し $aa^{-1} = a^{-1}a = e$
+
+    さらに $ab = ba$ が常に成り立つとき**アーベル群**（可換群）という。
+  questions:
+    - q: |-
+        整数全体 $\mathbb{Z}$ は掛け算について群か？
+      a: |-
+        ちがう。$2$ の逆元 $1/2$ が $\mathbb{Z}$ にない。足し算なら群（単位元 $0$、逆元 $-a$）。
+    - q: |-
+        可換でない群の例を挙げよ。
+      a: |-
+        可逆な $2 \times 2$ 実行列全体 $GL_2(\mathbb{R})$（行列の積）。または3文字の置換全体 $S_3$。回転と反転の順序を入れ替えると結果が変わる。
+
+- id: alg.subgroup
+  kind: definition
+  subject: algebra
+  title: 部分群と剰余類
+  requires: [alg.group]
+  source: Judson AATA, Ch.3, Ch.6
+  statement: |-
+    群 $G$ の部分集合 $H$ が同じ演算で群になるとき**部分群**といい $H \le G$ と書く。
+    $H$ が空でなく、$a, b \in H \Rightarrow ab^{-1} \in H$ ならば部分群である。
+
+    $g \in G$ に対し $gH = \{gh : h \in H\}$ を $H$ の（左）**剰余類**という。
+  questions:
+    - q: |-
+        $G$ の2つの左剰余類 $aH, bH$ は「一致する」か「交わらない」かのどちらかであることを示せ。
+      a: |-
+        $x \in aH \cap bH$ とすると $x = ah_1 = bh_2$ なので $a = bh_2h_1^{-1} \in bH$。すると $aH \subseteq bH$（$ah = b(h_2h_1^{-1}h)$）、対称に $bH \subseteq aH$。
+
+- id: alg.lagrange
+  kind: theorem
+  subject: algebra
+  title: ラグランジュの定理
+  requires: [alg.subgroup]
+  source: Judson AATA, Ch.6
+  why: |-
+    「部分群の大きさは全体の大きさを割り切る」。ここからフェルマーの小定理・オイラーの定理が出てきて、RSA の正しさや素数判定の原理になる。
+  statement: |-
+    $G$ が有限群で $H \le G$ ならば、$|H|$ は $|G|$ を割り切る。特に、$G$ の各元の位数は $|G|$ を割り切る。
+  proof:
+    - |-
+      左剰余類 $gH$ たちは $G$ を覆う（$g \in gH$）。
+    - |-
+      2つの左剰余類は一致するか交わらないかのどちらかなので、$G$ は互いに素な剰余類に分割される。
+    - |-
+      写像 $H \to gH$, $h \mapsto gh$ は全単射（逆写像は $x \mapsto g^{-1}x$）なので、各剰余類の大きさは $|H|$。
+    - |-
+      剰余類の個数を $k$ とすると $|G| = k\,|H|$。
+    - |-
+      元 $a$ の位数は、$a$ が生成する巡回部分群 $\langle a \rangle$ の大きさに等しいので、$|G|$ を割り切る。
+  questions:
+    - q: |-
+        逆（$|G|$ の任意の約数 $d$ に対し位数 $d$ の部分群が存在する）は成り立つか？
+      a: |-
+        成り立たない。交代群 $A_4$ は位数 $12$ だが、位数 $6$ の部分群をもたない。（素数べきについてはシローの定理で存在が保証される。）
+    - q: |-
+        位数が素数 $p$ の群は必ず巡回群であることを示せ。
+      a: |-
+        $a \ne e$ をとると $\langle a \rangle$ の位数は $p$ の約数で $1$ でないから $p$。よって $G = \langle a \rangle$。
+
+- id: alg.element-order
+  kind: problem
+  subject: algebra
+  title: 元の位数（計算）
+  requires: [alg.lagrange]
+  generator: alg.element-order
+
+- id: alg.fermat
+  kind: theorem
+  subject: algebra
+  title: フェルマーの小定理とオイラーの定理
+  requires: [alg.lagrange]
+  source: Judson AATA, Ch.6
+  statement: |-
+    **オイラー**: $\gcd(a, n) = 1$ ならば $a^{\varphi(n)} \equiv 1 \pmod n$。ここで $\varphi(n)$ は $1, \dots, n$ のうち $n$ と互いに素なものの個数。
+
+    **フェルマー**: $p$ が素数で $p \nmid a$ ならば $a^{p-1} \equiv 1 \pmod p$。
+  proof:
+    - |-
+      $n$ と互いに素な剰余類全体 $(\mathbb{Z}/n\mathbb{Z})^\times$ は掛け算で群をなし、その位数は $\varphi(n)$。
+    - |-
+      $\gcd(a, n) = 1$ なので $a$ はこの群の元。その位数を $k$ とする。
+    - |-
+      ラグランジュの定理より $k$ は $\varphi(n)$ を割り切るので、$a^{\varphi(n)} = (a^k)^{\varphi(n)/k} \equiv 1$。
+    - |-
+      $n = p$ が素数なら $\varphi(p) = p - 1$ で、フェルマーの小定理を得る。
+  questions:
+    - q: |-
+        フェルマーの小定理の逆（すべての $\gcd(a, n) = 1$ で $a^{n-1} \equiv 1 \pmod n$ なら $n$ は素数）は成り立つか？
+      a: |-
+        成り立たない。$561 = 3 \cdot 11 \cdot 17$ はカーマイケル数で、$561$ と互いに素なすべての $a$ で $a^{560} \equiv 1$ となる。だから実用の素数判定はフェルマーテストでなくミラー・ラビン法を使う。
+
+- id: alg.modpow
+  kind: problem
+  subject: algebra
+  title: べき乗の剰余（計算）
+  requires: [alg.fermat]
+  generator: alg.modpow
+
+- id: alg.inverse-mod
+  kind: problem
+  subject: algebra
+  title: 剰余環での逆元（計算）
+  requires: [alg.group]
+  generator: alg.inverse-mod
+
+- id: alg.rsa
+  kind: theorem
+  subject: algebra
+  title: RSA 暗号の正しさ
+  requires: [alg.fermat]
+  source: Judson AATA, Ch.7
+  why: |-
+    公開鍵暗号の代表例。数学の定理がそのままセキュリティの根拠になっている。どこが壊れると攻撃されるかを知ることが、安全な実装につながる。
+  statement: |-
+    相異なる素数 $p, q$ に対し $n = pq$、$\varphi(n) = (p-1)(q-1)$ とする。$ed \equiv 1 \pmod{\varphi(n)}$ ならば、$\gcd(m, n) = 1$ を満たす任意の $m$ について
+    $$(m^e)^d \equiv m \pmod n.$$
+    （実際は $\gcd(m, n) \ne 1$ でも成り立つ。）
+  proof:
+    - |-
+      $ed \equiv 1 \pmod{\varphi(n)}$ より、ある整数 $k \ge 0$ で $ed = 1 + k\varphi(n)$ と書ける。
+    - |-
+      $(m^e)^d = m^{ed} = m \cdot (m^{\varphi(n)})^k$。
+    - |-
+      オイラーの定理より $m^{\varphi(n)} \equiv 1 \pmod n$。
+    - |-
+      よって $m^{ed} \equiv m \cdot 1^k = m \pmod n$。
+  questions:
+    - q: |-
+        $n$ が素因数分解されると RSA が破られるのはなぜか？
+      a: |-
+        $p, q$ が分かれば $\varphi(n) = (p-1)(q-1)$ が計算でき、拡張ユークリッドの互除法で秘密鍵 $d \equiv e^{-1} \pmod{\varphi(n)}$ が求まる。
+    - q: |-
+        $e = 3$ で短い平文 $m$（$m^3 < n$）をパディングなしで暗号化すると何がまずいか？
+      a: |-
+        $c = m^3 \bmod n = m^3$（剰余がかからない）なので、整数の3乗根をとるだけで $m$ が復元できる。実装では OAEP などのパディングが必須。

@@ -1,0 +1,258 @@
+# C++: 未定義動作とメモリ安全性 — セキュリティとデバッグの土台
+# 出典: cppreference.com, learncpp.com
+
+- id: cpp.ub
+  kind: definition
+  subject: cpp
+  title: 未定義動作（UB）
+  requires: []
+  source: cppreference.com "Undefined behavior"
+  why: |-
+    脆弱性（バッファオーバーフロー、use-after-free）の多くは未定義動作から生まれる。「たまたま動く」コードを見抜けることが、デバッガー・セキュリティ担当としての基礎体力。
+  statement: |-
+    **未定義動作**とは、C++ 規格がプログラムの振る舞いに一切の要求を課さない状況のこと。起きた時点でプログラム全体の意味が保証されなくなり、コンパイラは「UB は起きない」と仮定して最適化してよい。
+
+    代表例: 符号付き整数のオーバーフロー、配列の範囲外アクセス、解放済みメモリへのアクセス（use-after-free）、ダングリング参照、初期化されていない変数の読み出し、ヌルポインタの参照外し、データ競合。
+  questions:
+    - q: |-
+        UB を見つけるのに役立つツールを2つ挙げよ。
+      a: |-
+        AddressSanitizer（`-fsanitize=address`: 範囲外アクセス・use-after-free）、UndefinedBehaviorSanitizer（`-fsanitize=undefined`: 符号付きオーバーフローなど）。ほかに Valgrind、コンパイラ警告 `-Wall -Wextra`、ファジング。
+    - q: |-
+        「UB のあるコードはデバッグビルドで正しく動けば問題ない」は正しいか？
+      a: |-
+        正しくない。最適化レベル・コンパイラ・周囲のコードが変わると挙動が変わる。最適化によって「ありえない」とされた分岐が丸ごと消えることもある。
+
+- id: cpp.signed-overflow
+  kind: code
+  subject: cpp
+  title: 符号付き整数のオーバーフロー
+  requires: [cpp.ub]
+  source: cppreference.com "Arithmetic operators"
+  lang: cpp
+  code: |
+    #include <climits>
+    #include <iostream>
+
+    bool check(int x) {
+        return x + 1 > x;
+    }
+
+    int main() {
+        std::cout << check(INT_MAX) << '\n';
+    }
+  prompt: |-
+    `g++ -O2` でコンパイルして実行すると何が起こるか？
+  answer:
+    type: choice
+    choices:
+      - 必ず 0 が出力される（INT_MIN に回り込むので）
+      - 必ず 1 が出力される
+      - 未定義動作。実際には 1 が出力されることが多い
+      - コンパイルエラー
+    value: 2
+  explanation: |-
+    `INT_MAX + 1` は符号付き整数のオーバーフローで未定義動作。コンパイラは「オーバーフローは起きない」と仮定してよいので、`x + 1 > x` を常に `true` と最適化することが多い（GCC/Clang の `-O2` で 1 が出る）。
+    符号なし整数は $2^n$ を法とする演算として定義されているので回り込みは UB ではない。オーバーフローを検査したいときは `__builtin_add_overflow` や C++26 の `std::add_sat` を使う。
+
+- id: cpp.float-equal
+  kind: code
+  subject: cpp
+  title: 浮動小数点数の比較
+  requires: []
+  source: learncpp.com "Floating point numbers"
+  lang: cpp
+  code: |
+    #include <iostream>
+
+    int main() {
+        double a = 0.1 + 0.2;
+        std::cout << (a == 0.3) << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "1"
+      - "0"
+      - 未定義動作
+    value: 1
+  explanation: |-
+    `0` が出力される。$0.1, 0.2, 0.3$ はどれも2進数で有限桁に表せず、最も近い倍精度数に丸められる。$0.1 + 0.2$ の結果は `0.30000000000000004` で、$0.3$ を丸めた値と異なる。
+    比較には許容誤差を使う: `std::abs(a - b) <= 1e-9 * std::max({1.0, std::abs(a), std::abs(b)})`。数値計算の研究コードで頻出のバグ。
+  verify:
+    stdout: "0\n"
+
+- id: cpp.unsigned-loop
+  kind: code
+  subject: cpp
+  title: 符号なし整数の逆順ループ
+  requires: [cpp.signed-overflow]
+  source: learncpp.com "Unsigned integers, and why to avoid them"
+  lang: cpp
+  code: |
+    #include <vector>
+    #include <iostream>
+
+    void print_reverse(const std::vector<int>& v) {
+        for (std::size_t i = v.size() - 1; i >= 0; --i) {
+            std::cout << v[i] << '\n';
+        }
+    }
+  prompt: |-
+    このコードのバグを説明し、修正せよ。
+  answer:
+    type: self
+    value: |-
+      `std::size_t` は符号なしなので `i >= 0` は常に真で、ループが終わらない。`i = 0` から `--i` すると最大値に回り込み、範囲外アクセスになる。さらに `v` が空なら `v.size() - 1` がいきなり最大値になる。
+  explanation: |-
+    修正例:
+    ```
+    for (std::size_t i = v.size(); i-- > 0; ) { ... }
+    ```
+    または `for (auto it = v.rbegin(); it != v.rend(); ++it)`、C++20 なら `for (int x : v | std::views::reverse)`。`-Wall -Wextra` を付けると「比較が常に真」と警告される。
+
+- id: cpp.dangling
+  kind: code
+  subject: cpp
+  title: ダングリング参照
+  requires: [cpp.ub]
+  source: cppreference.com "Reference declaration"
+  lang: cpp
+  code: |
+    #include <string>
+    #include <iostream>
+
+    const std::string& greeting() {
+        std::string s = "hello";
+        return s;
+    }
+
+    int main() {
+        std::cout << greeting() << '\n';
+    }
+  prompt: |-
+    このコードの問題点は何か？
+  answer:
+    type: self
+    value: |-
+      関数が終わるとローカル変数 `s` は破棄されるので、返した参照は破棄済みのオブジェクトを指す（ダングリング参照）。それを読むのは未定義動作。
+  explanation: |-
+    値で返せば解決する（`std::string greeting()`）。戻り値最適化（RVO）が効くのでコピーのコストは気にしなくてよい。
+    同じ種類のバグ: 一時オブジェクトを指す `std::string_view`、ローカル変数のアドレスを返すポインタ、ラムダの参照キャプチャがスコープ外で使われる場合。
+
+- id: cpp.vector-invalidation
+  kind: code
+  subject: cpp
+  title: イテレータ・参照の無効化
+  requires: [cpp.dangling]
+  source: cppreference.com "std::vector::push_back"
+  lang: cpp
+  code: |
+    #include <vector>
+    #include <iostream>
+
+    int main() {
+        std::vector<int> v = {1, 2, 3};
+        int& first = v[0];
+        v.push_back(4);
+        std::cout << first << '\n';
+    }
+  prompt: |-
+    このコードは安全か？理由とともに答えよ。
+  answer:
+    type: choice
+    choices:
+      - 安全。first は 1 を指したまま
+      - 安全でない。push_back で再確保が起きると first はダングリング参照になる
+      - コンパイルエラーになる
+    value: 1
+  explanation: |-
+    `push_back` で容量が足りないと、要素はより大きな新しい領域へ移され、古い領域は解放される。`first` は古い領域を指したままなので、読むと use-after-free（未定義動作）。
+    再確保が起きなければたまたま動くため、発見しにくい。Rust ではこの種のコードはコンパイル時に拒否される（Rust の「借用の衝突」カードと比べてみよう）。
+
+- id: cpp.raii
+  kind: definition
+  subject: cpp
+  title: RAII
+  requires: [cpp.dangling]
+  source: cppreference.com "RAII"
+  why: |-
+    例外や早期 return があってもリソース（メモリ・ファイル・ロック）を確実に解放する C++ の基本設計。リーク・二重解放をなくす。
+  statement: |-
+    **RAII**（Resource Acquisition Is Initialization）とは、リソースの獲得をオブジェクトの初期化（コンストラクタ）で行い、解放をデストラクタで行う設計方針。
+    オブジェクトがスコープを抜けると、どの経路で抜けても（例外を含む）デストラクタが必ず呼ばれるので、解放忘れが起きない。
+    例: `std::unique_ptr`, `std::vector`, `std::lock_guard`, `std::fstream`。
+  questions:
+    - q: |-
+        `new` / `delete` を直接書くより `std::unique_ptr` を使うべき理由は？
+      a: |-
+        途中で例外や return があっても自動で解放され、二重解放もない。所有者が1人であることが型で表現され、ムーブで所有権を移せる。Rust の所有権モデルとほぼ同じ考え方。
+
+- id: cpp.gauss
+  kind: exercise
+  subject: cpp
+  title: 部分ピボット付きガウスの消去法を実装する
+  requires: [cpp.float-equal, la.det-invertible]
+  source: 数値計算の標準的なアルゴリズム
+  lang: cpp
+  prompt: |-
+    連立1次方程式 $Ax = b$ を部分ピボット選択付きのガウスの消去法で解く関数を書け。$A$ が（数値的に）特異なら `std::nullopt` を返すこと。
+    実装したら、次の行列で試そう: $A = \begin{pmatrix} 2 & 1 & -1 \\ -3 & -1 & 2 \\ -2 & 1 & 2 \end{pmatrix}$, $b = (8, -11, -3)^\top$。解は $x = (2, 3, -1)^\top$。
+  starter: |
+    #include <cmath>
+    #include <iostream>
+    #include <optional>
+    #include <vector>
+
+    using Vec = std::vector<double>;
+    using Mat = std::vector<Vec>;
+
+    std::optional<Vec> solve(Mat A, Vec b) {
+        const std::size_t n = A.size();
+        // TODO: 前進消去（各列で絶対値最大の行をピボットに選ぶ）
+        // TODO: 後退代入
+        return std::nullopt;
+    }
+
+    int main() {
+        Mat A = {{2, 1, -1}, {-3, -1, 2}, {-2, 1, 2}};
+        Vec b = {8, -11, -3};
+        if (auto x = solve(A, b)) {
+            for (double xi : *x) std::cout << xi << ' ';
+            std::cout << '\n';
+        } else {
+            std::cout << "singular\n";
+        }
+    }
+  solution: |
+    std::optional<Vec> solve(Mat A, Vec b) {
+        const std::size_t n = A.size();
+        for (std::size_t k = 0; k < n; ++k) {
+            // 部分ピボット選択: 絶対値最大の行を k 行目に持ってくる
+            std::size_t p = k;
+            for (std::size_t i = k + 1; i < n; ++i)
+                if (std::abs(A[i][k]) > std::abs(A[p][k])) p = i;
+            if (std::abs(A[p][k]) < 1e-12) return std::nullopt;
+            std::swap(A[k], A[p]);
+            std::swap(b[k], b[p]);
+            for (std::size_t i = k + 1; i < n; ++i) {
+                double f = A[i][k] / A[k][k];
+                for (std::size_t j = k; j < n; ++j) A[i][j] -= f * A[k][j];
+                b[i] -= f * b[k];
+            }
+        }
+        Vec x(n);
+        for (std::size_t i = n; i-- > 0;) {
+            double s = b[i];
+            for (std::size_t j = i + 1; j < n; ++j) s -= A[i][j] * x[j];
+            x[i] = s / A[i][i];
+        }
+        return x;
+    }
+  checklist:
+    - 例題で (2, 3, -1) が得られた
+    - 特異行列（例：2行目が1行目の2倍）で nullopt が返る
+    - 逆順ループで size_t の回り込みバグを起こしていない
+    - ピボット選択をしないと $\begin{pmatrix} 10^{-20} & 1 \\ 1 & 1 \end{pmatrix}$ で誤差が大きくなることを確かめた
