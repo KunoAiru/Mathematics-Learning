@@ -5,7 +5,7 @@
   kind: definition
   subject: rust
   title: 所有権の規則
-  requires: []
+  requires: [rust.variables, rust.functions]
   source: The Rust Programming Language, Ch.4.1
   why: |-
     Rust はガベージコレクタなしで use-after-free や二重解放をコンパイル時に排除する。その仕組みの中心が所有権。C++ の RAII とムーブを言語の規則にしたもの。

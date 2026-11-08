@@ -1,0 +1,375 @@
+# C++ 3: 標準ライブラリ（コンテナ・アルゴリズム・ラムダ）
+# 出典: cppreference.com, learncpp.com
+
+- id: cpp.vector
+  kind: definition
+  subject: cpp
+  title: std::vector
+  requires: [cpp.arrays]
+  source: cppreference.com "std::vector"
+  statement: |-
+    要素を**連続したメモリ**に持つ可変長配列。
+    - `push_back` / `emplace_back` は償却 $O(1)$。容量（`capacity()`）が足りなくなると約1.5〜2倍の領域を確保して全要素を移す
+    - 要素数が見積もれるなら `reserve(n)` で再確保を減らせる
+    - `v[i]` は検査なし、`v.at(i)` は範囲検査あり
+    - 再確保が起きると、要素への参照・ポインタ・イテレータはすべて無効になる
+  questions:
+    - q: |-
+        「容量を2倍にする」戦略だと `push_back` が償却 $O(1)$ になる理由は？
+      a: |-
+        $n$ 回の追加で要素を移す総回数は $1 + 2 + 4 + \dots + n/2 < n$ なので、1回あたり定数回。毎回 1 つずつ増やすと総コストは $O(n^2)$ になる。
+
+- id: cpp.string
+  kind: definition
+  subject: cpp
+  title: std::string と std::string_view
+  requires: [cpp.vector]
+  source: cppreference.com "std::basic_string", "std::basic_string_view"
+  statement: |-
+    - `std::string` は文字（`char`）の可変長配列で、メモリを所有する。`+` で連結、`substr`、`find`（見つからなければ `std::string::npos`）
+    - `std::string_view`（C++17）は**所有しない**読み取り専用の参照。コピーなしで部分文字列を扱えるが、元の文字列より長く使うとダングリングになる
+    - `size()` は**バイト数**。UTF-8 の日本語は1文字が3バイトのことが多い
+  questions:
+    - q: |-
+        `std::string_view f() { std::string s = "abc"; return s; }` の問題は？
+      a: |-
+        `s` は関数を抜けると破棄されるので、返した `string_view` は解放済みのメモリを指す（ダングリング）。所有が必要なら `std::string` を返す。
+
+- id: cpp.string-size
+  kind: code
+  subject: cpp
+  title: 文字列の長さはバイト数
+  requires: [cpp.string]
+  source: cppreference.com "std::basic_string::size"
+  lang: cpp
+  code: |
+    #include <iostream>
+    #include <string>
+
+    int main() {
+        std::string s = "日本";
+        std::cout << s.size() << '\n';
+    }
+  prompt: |-
+    ソースファイルが UTF-8 で、GCC で普通にコンパイルしたときの出力は？
+  answer:
+    type: choice
+    choices:
+      - "2"
+      - "4"
+      - "6"
+    value: 2
+  explanation: |-
+    `std::string` はバイト列で、「日」「本」はそれぞれ UTF-8 で3バイトなので $6$。
+    文字数を数えたり1文字ずつ扱ったりするにはデコードが必要。バイト数と文字数の取り違えは、入力長の検査をすり抜けるバグや、マルチバイト文字の途中で切ってしまうバグにつながる。
+  verify:
+    stdout: "6\n"
+
+- id: cpp.map
+  kind: definition
+  subject: cpp
+  title: std::map と std::unordered_map
+  requires: [cpp.vector]
+  source: cppreference.com "std::map", "std::unordered_map"
+  statement: |-
+    - `std::map<K, V>` は平衡二分探索木。キーの**順序で並ぶ**。探索・挿入は $O(\log n)$
+    - `std::unordered_map<K, V>` はハッシュ表。順序はない。平均 $O(1)$、最悪 $O(n)$
+    - `m[key]` は**キーがなければ既定値で挿入してから**参照を返す。存在確認には `m.contains(key)`（C++20）か `m.find(key) != m.end()`
+    - 順番に意味がないなら `unordered_map`、範囲検索や順序付きの走査が要るなら `map`
+  questions:
+    - q: |-
+        外部入力をキーにする `unordered_map` に潜むセキュリティ上のリスクは？
+      a: |-
+        攻撃者がハッシュ値の衝突するキーを大量に送ると、各操作が $O(n)$ に劣化してサービス不能になりうる（ハッシュ衝突攻撃）。乱数の種を入れたハッシュ関数を使う、要素数を制限する、`map` を使うなどで防ぐ。
+
+- id: cpp.map-bracket
+  kind: code
+  subject: cpp
+  title: map の operator[] は挿入する
+  requires: [cpp.map]
+  source: cppreference.com "std::map::operator[]"
+  lang: cpp
+  code: |
+    #include <iostream>
+    #include <map>
+    #include <string>
+
+    int main() {
+        std::map<std::string, int> m;
+        if (m["x"] == 0) {
+            std::cout << "zero ";
+        }
+        std::cout << m.size() << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "zero 0"
+      - "zero 1"
+      - "0"
+      - 例外が投げられる
+    value: 1
+  explanation: |-
+    `m["x"]` はキー `"x"` がないので値 `0` で挿入してから参照を返す。調べただけのつもりで要素が増える。
+    存在確認は `m.contains("x")`、値の読み出しは `auto it = m.find("x");`。`const` な map では `operator[]` は使えず `at()` を使う（なければ例外）。
+  verify:
+    stdout: "zero 1\n"
+
+- id: cpp.iterators
+  kind: definition
+  subject: cpp
+  title: イテレータと半開区間
+  requires: [cpp.vector]
+  source: cppreference.com "Iterator library"
+  statement: |-
+    イテレータはコンテナの要素を指す「一般化されたポインタ」。`*it` で要素、`++it` で次へ。
+    範囲は**半開区間** $[\text{begin}, \text{end})$ で表し、`end()` は最後の要素の**次**を指す（参照外ししてはいけない）。
+    ```
+    for (auto it = v.begin(); it != v.end(); ++it) { ... }
+    // 範囲 for は上と同じ意味
+    for (auto& x : v) { ... }
+    ```
+    半開区間なら、空の範囲は `begin == end`、長さは `end - begin` と自然に書ける。
+  questions:
+    - q: |-
+        範囲 for の中で `v.push_back(...)` すると何が起きうるか？
+      a: |-
+        再確保が起きると、範囲 for が内部で持っているイテレータが無効になり未定義動作。要素を追加しながら走査するなら添字でループするか、追加分を別のコンテナに集める。
+
+- id: cpp.algorithms
+  kind: definition
+  subject: cpp
+  title: アルゴリズムライブラリ
+  requires: [cpp.iterators]
+  source: cppreference.com "Algorithms library"
+  why: |-
+    ループを手書きする代わりに名前の付いたアルゴリズムを使うと、意図が読みやすく、境界のバグ（off-by-one）が減る。
+  statement: |-
+    `<algorithm>` と `<numeric>` に、イテレータの範囲を受け取る汎用アルゴリズムがある。
+    ```
+    std::sort(v.begin(), v.end());                          // O(n log n)
+    auto it = std::find(v.begin(), v.end(), 42);            // 線形探索
+    bool ok = std::binary_search(v.begin(), v.end(), 42);   // ソート済み前提
+    auto n = std::count_if(v.begin(), v.end(), [](int x) { return x % 2 == 0; });
+    auto s = std::accumulate(v.begin(), v.end(), 0LL);      // 初期値の型で計算
+    std::ranges::sort(v);                                   // C++20 の ranges 版
+    ```
+  questions:
+    - q: |-
+        `std::lower_bound` は何を返すか？ソートされていない範囲に使うとどうなるか？
+      a: |-
+        ソート済み範囲で「値以上の最初の要素」を指すイテレータ（二分探索、$O(\log n)$）。ソートされていない範囲では前提が崩れ、結果に意味がない（未定義動作ではないが誤った答え）。
+
+- id: cpp.accumulate-type
+  kind: code
+  subject: cpp
+  title: accumulate の初期値の型
+  requires: [cpp.algorithms]
+  source: cppreference.com "std::accumulate"
+  lang: cpp
+  code: |
+    #include <iostream>
+    #include <numeric>
+    #include <vector>
+
+    int main() {
+        std::vector<double> v{0.5, 0.5, 0.5, 0.5};
+        std::cout << std::accumulate(v.begin(), v.end(), 0) << ' '
+                  << std::accumulate(v.begin(), v.end(), 0.0) << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "2 2"
+      - "0 2"
+      - "2 2.0"
+      - "0 0"
+    value: 1
+  explanation: |-
+    `accumulate` は**初期値の型**で和を持つ。`0` は `int` なので、毎回 `int + double` の結果が `int` に切り捨てられて $0 + 0.5 \to 0$ が続き、$0$。`0.0` なら $2$。
+    気づきにくい数値計算のバグ。`std::reduce` も同じ。合計がオーバーフローしそうなら `0LL` を使う。
+  verify:
+    stdout: "0 2\n"
+
+- id: cpp.remove-erase
+  kind: code
+  subject: cpp
+  title: std::remove は要素を消さない
+  requires: [cpp.algorithms]
+  source: cppreference.com "std::remove", "std::erase"
+  lang: cpp
+  code: |
+    #include <algorithm>
+    #include <iostream>
+    #include <vector>
+
+    int main() {
+        std::vector<int> v{1, 2, 3, 2, 4};
+        auto it = std::remove(v.begin(), v.end(), 2);
+        std::cout << v.size() << ' ' << (it - v.begin()) << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "3 3"
+      - "5 3"
+      - "5 5"
+      - "3 5"
+    value: 1
+  explanation: |-
+    `std::remove` は残す要素を前に詰めて「新しい終わり」を返すだけで、コンテナの大きさは変えない（アルゴリズムはイテレータしか受け取らないので、コンテナの要素を消せない）。
+    実際に消すには `v.erase(std::remove(v.begin(), v.end(), 2), v.end());`（erase-remove イディオム）、C++20 なら `std::erase(v, 2);`。
+  verify:
+    stdout: "5 3\n"
+
+- id: cpp.lambda
+  kind: definition
+  subject: cpp
+  title: ラムダ式とキャプチャ
+  requires: [cpp.algorithms, cpp.references-pointers]
+  source: cppreference.com "Lambda expressions"
+  statement: |-
+    その場で関数オブジェクトを作る式。
+    ```
+    int base = 10;
+    auto add = [base](int x) { return base + x; };   // base を値でキャプチャ（コピー）
+    auto inc = [&base]() { ++base; };                // 参照でキャプチャ
+    auto gen = [](auto a, auto b) { return a < b; }; // ジェネリックラムダ
+    ```
+    `[=]` は使う変数をすべて値で、`[&]` はすべて参照でキャプチャする。値でキャプチャしたものを中で変えるには `mutable` が要る。
+  questions:
+    - q: |-
+        参照でキャプチャしたラムダを、関数から返したり別スレッドに渡したりすると何が危ないか？
+      a: |-
+        キャプチャした変数が先に破棄されると、ラムダの中の参照がダングリングになる。寿命が呼び出し元を超えるラムダには値（またはムーブ `[p = std::move(p)]`）でキャプチャする。
+
+- id: cpp.lambda-capture
+  kind: code
+  subject: cpp
+  title: 値キャプチャと参照キャプチャ
+  requires: [cpp.lambda]
+  source: cppreference.com "Lambda expressions"
+  lang: cpp
+  code: |
+    #include <iostream>
+
+    int main() {
+        int x = 1;
+        auto by_value = [x] { return x; };
+        auto by_ref = [&x] { return x; };
+        x = 2;
+        std::cout << by_value() << by_ref() << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "11"
+      - "12"
+      - "21"
+      - "22"
+    value: 1
+  explanation: |-
+    値キャプチャはラムダを**作った時点**の値（$1$）をコピーして持つ。参照キャプチャは呼び出した時点の `x`（$2$）を読む。
+  verify:
+    stdout: "12\n"
+
+- id: cpp.sort-comparator
+  kind: code
+  subject: cpp
+  title: 比較関数は狭義弱順序に
+  requires: [cpp.lambda]
+  source: cppreference.com "Compare (named requirement)"
+  lang: cpp
+  code: |
+    std::sort(v.begin(), v.end(), [](int a, int b) {
+        return a <= b;
+    });
+  prompt: |-
+    この比較関数の問題点は何か？
+  answer:
+    type: self
+    value: |-
+      `std::sort` の比較関数は狭義弱順序（特に `comp(a, a)` は偽）でなければならない。`<=` は等しい要素で真を返すので前提が崩れ、未定義動作になる。実装によっては配列の範囲外を読んでクラッシュする。
+  explanation: |-
+    昇順なら `a < b`、降順なら `a > b`（または `std::greater<>{}`）。複数キーで並べるなら `std::tie(a.x, a.y) < std::tie(b.x, b.y)` や既定の `<=>` を使うと間違えにくい。
+    デバッグ時は `-D_GLIBCXX_DEBUG` を付けると、不正な比較関数を検出してくれることがある。
+
+- id: cpp.optional-variant
+  kind: definition
+  subject: cpp
+  title: std::optional と std::variant
+  requires: [cpp.class]
+  source: cppreference.com "std::optional", "std::variant"
+  statement: |-
+    - `std::optional<T>` は「値があるか、ない」。失敗しうる関数の戻り値に使う（特別な値 `-1` や `nullptr` で失敗を表すより安全）
+    ```
+    std::optional<int> parse(std::string_view s);
+    if (auto n = parse("42")) std::cout << *n;      // 値があるときだけ
+    int m = parse("x").value_or(0);
+    ```
+    - `std::variant<A, B>` は「A か B のどちらか」を型安全に持つ（タグ付き共用体）。`std::visit` で場合分けする
+    - C++23 には成功値かエラーを持つ `std::expected<T, E>` がある（Rust の `Result` に相当）
+  questions:
+    - q: |-
+        値のない `optional` に `*opt` を使うと？ `opt.value()` なら？
+      a: |-
+        `*opt` は検査なしで未定義動作。`value()` は `std::bad_optional_access` 例外を投げる。
+
+- id: cpp.word-count
+  kind: exercise
+  subject: cpp
+  title: 単語の出現回数を数える
+  requires: [cpp.map, cpp.sort-comparator, cpp.string]
+  source: コンテナとアルゴリズムの総合演習
+  lang: cpp
+  prompt: |-
+    空白で区切られた文字列から、出現回数の多い順に上位 $k$ 語を返す関数を書け。回数が同じなら辞書順で前の語を先にする。
+  starter: |
+    #include <algorithm>
+    #include <cassert>
+    #include <iostream>
+    #include <sstream>
+    #include <string>
+    #include <unordered_map>
+    #include <utility>
+    #include <vector>
+
+    std::vector<std::pair<std::string, int>> top_words(const std::string& text, std::size_t k) {
+        // TODO: unordered_map で数え、vector に移して並べ替える
+        return {};
+    }
+
+    int main() {
+        auto r = top_words("b a c a b a d", 2);
+        assert(r.size() == 2);
+        assert(r[0] == std::make_pair(std::string("a"), 3));
+        assert(r[1] == std::make_pair(std::string("b"), 2));
+        assert(top_words("x y", 5).size() == 2);
+        assert(top_words("", 3).empty());
+        std::cout << "all tests passed\n";
+    }
+  solution: |
+    std::vector<std::pair<std::string, int>> top_words(const std::string& text, std::size_t k) {
+        std::unordered_map<std::string, int> count;
+        std::istringstream in(text);
+        for (std::string w; in >> w;) ++count[w];
+        std::vector<std::pair<std::string, int>> v(count.begin(), count.end());
+        std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) {
+            if (a.second != b.second) return a.second > b.second;
+            return a.first < b.first;
+        });
+        if (v.size() > k) v.resize(k);
+        return v;
+    }
+  checklist:
+    - すべての assert が通った
+    - 比較関数が狭義弱順序になっている（`>=` を使っていない）
+    - 全部並べ替える代わりに `std::partial_sort` を使うと計算量がどう変わるか説明できる

@@ -1,0 +1,231 @@
+# Rust 6: ライフタイムとスマートポインタ
+# 出典: TRPL Ch.10.3, Ch.15（無料公開）
+
+- id: rust.lifetimes
+  kind: definition
+  subject: rust
+  title: ライフタイム
+  requires: [rust.borrow, rust.generics]
+  source: TRPL Ch.10.3
+  why: |-
+    「この参照はいつまで有効か」を型として書き、コンパイラが検査する。C/C++ のダングリングポインタを言語の仕組みで消している部分。
+  statement: |-
+    ライフタイム注釈 `'a` は、複数の参照の**有効期間の関係**を表す（期間を延ばすものではない）。
+    ```
+    fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+        if x.len() > y.len() { x } else { y }
+    }
+    ```
+    「戻り値は `x` と `y` の両方が有効な間だけ有効」という意味。多くの場合は**省略規則**により書かなくてよい（引数の参照が1つならそれに合わせる、`&self` があればそれに合わせる）。
+    参照を持つ構造体にも必要: `struct Parser<'a> { input: &'a str }`。`'static` はプログラムの終わりまで有効（文字列リテラルなど）。
+  questions:
+    - q: |-
+        ライフタイムのエラーを「とりあえず `'static` を付けて」解決しようとするのがよくない理由は？
+      a: |-
+        本当にプログラム全体で生きる値しか渡せなくなり、ほとんどの場合は呼び出し側でエラーになるか、`Box::leak` などでメモリを漏らす設計になる。所有権を持たせる（`String` を返す、`clone` する）ほうが正しいことが多い。
+
+- id: rust.longest
+  kind: code
+  subject: rust
+  title: ライフタイム注釈が必要な関数
+  requires: [rust.lifetimes]
+  source: TRPL Ch.10.3
+  lang: rust
+  code: |
+    fn longest(x: &str, y: &str) -> &str {
+        if x.len() > y.len() { x } else { y }
+    }
+
+    fn main() {
+        println!("{}", longest("abc", "de"));
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "abc と出力される"
+      - コンパイルエラー（戻り値のライフタイムが決まらない）
+      - 実行時にパニックする
+    value: 1
+  explanation: |-
+    参照の引数が2つあり、戻り値がどちらの寿命に従うか省略規則では決まらないのでエラー E0106（missing lifetime specifier）。`fn longest<'a>(x: &'a str, y: &'a str) -> &'a str` と書く。
+  verify:
+    build: error
+
+- id: rust.dangling-ref
+  kind: code
+  subject: rust
+  title: スコープを抜ける値への参照
+  requires: [rust.lifetimes]
+  source: TRPL Ch.10.3
+  lang: rust
+  code: |
+    fn main() {
+        let r;
+        {
+            let x = 5;
+            r = &x;
+        }
+        println!("{}", r);
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "5 と出力される"
+      - "不定な値が出力される"
+      - コンパイルエラー（x の寿命が足りない）
+    value: 2
+  explanation: |-
+    `x` は内側のブロックの終わりで破棄されるのに、`r` はその後も使われる。借用チェッカーがこれを検出してエラー E0597（`x` does not live long enough）。C++ で同じことを書くとコンパイルが通り、未定義動作になる。
+  verify:
+    build: error
+
+- id: rust.box
+  kind: definition
+  subject: rust
+  title: Box<T>
+  requires: [rust.ownership, rust.enum]
+  source: TRPL Ch.15.1
+  statement: |-
+    `Box<T>` は値をヒープに置き、それを唯一所有するスマートポインタ（C++ の `std::unique_ptr`）。スコープを抜けると自動で解放される。
+    使いどころ:
+    - **再帰的な型**: 大きさがコンパイル時に決まらない型を、ポインタの大きさにする
+    ```
+    enum List { Cons(i32, Box<List>), Nil }
+    ```
+    - トレイトオブジェクト `Box<dyn Trait>`
+    - 大きな値をムーブするときのコピーを減らす
+  questions:
+    - q: |-
+        `enum List { Cons(i32, List), Nil }` がコンパイルエラーになる理由は？
+      a: |-
+        `List` の中に `List` がそのまま入っているので、大きさが無限に再帰して決まらない（E0072）。`Box<List>` ならポインタ1つ分の大きさに決まる。
+
+- id: rust.rc-refcell
+  kind: definition
+  subject: rust
+  title: Rc<T> と RefCell<T>
+  requires: [rust.box]
+  source: TRPL Ch.15.4–15.6
+  statement: |-
+    - `Rc<T>` は参照カウントで所有権を**共有**する（シングルスレッド用。C++ の `shared_ptr` に近いがカウントは非アトミック）。`Rc::clone(&a)` でカウントを増やす。中身は不変
+    - `RefCell<T>` は**内部可変性**: `&` しか持っていなくても中身を変更できる。借用規則（可変は1つだけ）の検査を**実行時**に行い、違反するとパニックする
+    - よく使う組み合わせ `Rc<RefCell<T>>`: 共有された、変更可能な値（グラフ構造など）
+    - 循環参照はリークするので、親への参照などは `Weak<T>` にする
+  questions:
+    - q: |-
+        `RefCell` を多用するのが良くない兆候とされるのはなぜか？
+      a: |-
+        借用規則の検査がコンパイル時から実行時に移り、違反がパニックとして本番で見つかることになる。データの所有関係を設計し直す（所有者を1つにする、添字で参照するなど）と不要になることが多い。
+
+- id: rust.rc-count
+  kind: code
+  subject: rust
+  title: Rc の参照カウント
+  requires: [rust.rc-refcell]
+  source: std ドキュメント "Rc::strong_count"
+  lang: rust
+  code: |
+    use std::rc::Rc;
+
+    fn main() {
+        let a = Rc::new(String::from("x"));
+        let b = Rc::clone(&a);
+        {
+            let _c = Rc::clone(&a);
+            print!("{} ", Rc::strong_count(&a));
+        }
+        drop(b);
+        println!("{}", Rc::strong_count(&a));
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "3 1"
+      - "3 2"
+      - "2 1"
+      - "1 1"
+    value: 0
+  explanation: |-
+    `a`, `b`, `_c` の $3$ つが同じ値を共有している。ブロックを抜けて `_c` が、`drop(b)` で `b` が破棄されるとカウントは $1$。`Rc::clone` は文字列を複製せず、カウントを増やすだけ。
+  verify:
+    stdout: "3 1\n"
+
+- id: rust.refcell-panic
+  kind: code
+  subject: rust
+  title: RefCell の実行時借用検査
+  requires: [rust.rc-refcell]
+  source: std ドキュメント "RefCell::borrow_mut"
+  lang: rust
+  code: |
+    use std::cell::RefCell;
+
+    fn main() {
+        let cell = RefCell::new(vec![1]);
+        let r = cell.borrow();
+        cell.borrow_mut().push(2);
+        println!("{:?}", r);
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "[1, 2] と出力される"
+      - "[1] と出力される"
+      - コンパイルは通るが、実行時にパニックする
+      - コンパイルエラー
+    value: 2
+  explanation: |-
+    `cell.borrow()` の不変借用 `r` が生きている間に `borrow_mut()` で可変借用しようとしたので、実行時に `already borrowed: BorrowMutError` でパニックする。通常の参照なら借用チェッカーがコンパイル時に止めるが、`RefCell` は検査を実行時に遅らせる。
+    パニックさせたくないなら `try_borrow_mut()`（`Result` を返す）を使う。
+  verify:
+    build: ok
+    panics: true
+
+- id: rust.drop-order
+  kind: code
+  subject: rust
+  title: Drop の順番と let _
+  requires: [rust.std-traits]
+  source: The Rust Reference "Destructors"
+  lang: rust
+  code: |
+    struct D(&'static str);
+
+    impl Drop for D {
+        fn drop(&mut self) {
+            print!("{} ", self.0);
+        }
+    }
+
+    fn main() {
+        let _a = D("a");
+        let _b = D("b");
+        {
+            let _c = D("c");
+        }
+        let _ = D("tmp");
+        println!("end");
+    }
+  prompt: |-
+    出力は何か？（`let _a` と `let _` の違いに注意）
+  answer:
+    type: choice
+    choices:
+      - "c end と改行、b a tmp"
+      - "c tmp end と改行、b a"
+      - "c end と改行、tmp b a"
+      - "c tmp end と改行、a b"
+    value: 1
+  explanation: |-
+    `_c` はブロックの終わりで破棄。`let _ = D("tmp");` の `_` は**束縛しない**パターンなので、一時値はその文の終わりですぐ破棄される（`_a` のように名前が `_` で始まる変数は普通に束縛される）。`main` の終わりで `_b`、`_a` の順（宣言と逆順）に破棄。
+    ロックガードを `let _ = mutex.lock();` と書くと即座にロックが外れる、という有名なバグの原因。
+  verify:
+    stdout: "c tmp end\nb a "

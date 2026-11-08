@@ -5,7 +5,7 @@
   kind: definition
   subject: cpp
   title: 未定義動作（UB）
-  requires: []
+  requires: [cpp.types]
   source: cppreference.com "Undefined behavior"
   why: |-
     脆弱性（バッファオーバーフロー、use-after-free）の多くは未定義動作から生まれる。「たまたま動く」コードを見抜けることが、デバッガー・セキュリティ担当としての基礎体力。
@@ -59,7 +59,7 @@
   kind: code
   subject: cpp
   title: 浮動小数点数の比較
-  requires: []
+  requires: [cpp.types]
   source: learncpp.com "Floating point numbers"
   lang: cpp
   code: |
@@ -88,7 +88,7 @@
   kind: code
   subject: cpp
   title: 符号なし整数の逆順ループ
-  requires: [cpp.signed-overflow]
+  requires: [cpp.signed-overflow, cpp.vector]
   source: learncpp.com "Unsigned integers, and why to avoid them"
   lang: cpp
   code: |
@@ -117,7 +117,7 @@
   kind: code
   subject: cpp
   title: ダングリング参照
-  requires: [cpp.ub]
+  requires: [cpp.ub, cpp.references-pointers]
   source: cppreference.com "Reference declaration"
   lang: cpp
   code: |
@@ -146,7 +146,7 @@
   kind: code
   subject: cpp
   title: イテレータ・参照の無効化
-  requires: [cpp.dangling]
+  requires: [cpp.dangling, cpp.vector]
   source: cppreference.com "std::vector::push_back"
   lang: cpp
   code: |
@@ -194,7 +194,7 @@
   kind: exercise
   subject: cpp
   title: 部分ピボット付きガウスの消去法を実装する
-  requires: [cpp.float-equal, la.det-invertible]
+  requires: [cpp.float-equal, cpp.vector, la.det-invertible]
   source: 数値計算の標準的なアルゴリズム
   lang: cpp
   prompt: |-

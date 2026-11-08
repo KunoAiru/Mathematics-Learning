@@ -1,0 +1,350 @@
+# Rust 7: エラー処理・モジュール・テスト・並行処理・unsafe
+# 出典: TRPL（無料公開）
+
+- id: rust.error-handling
+  kind: definition
+  subject: rust
+  title: エラー処理と ? 演算子
+  requires: [rust.option-result, rust.std-traits]
+  source: TRPL Ch.9
+  statement: |-
+    - 回復不能なバグ（前提条件の破れ）は `panic!`、起こりうる失敗（ファイルがない、入力が不正）は `Result<T, E>` で返す
+    - `?` 演算子: `Ok(v)` なら `v` を取り出し、`Err(e)` なら `From` で変換して**呼び出し元へ早期リターン**する
+    ```
+    fn read_number(path: &str) -> Result<i64, Box<dyn std::error::Error>> {
+        let text = std::fs::read_to_string(path)?;   // io::Error
+        let n = text.trim().parse::<i64>()?;          // ParseIntError
+        Ok(n)
+    }
+    ```
+    - ライブラリでは独自のエラー列挙型を定義し、`Display` と `std::error::Error` を実装する（`thiserror` クレートが定番）。アプリでは `anyhow` などで手軽にまとめることが多い
+  questions:
+    - q: |-
+        `unwrap()` を使ってよい場面はどこか？
+      a: |-
+        テスト、試作、そして「論理的に失敗しえない」ことを自分で保証できる箇所（その場合は理由を書いた `expect("...")` が望ましい）。外部入力やファイル操作の結果には使わない。
+
+- id: rust.question-mark
+  kind: code
+  subject: rust
+  title: "? 演算子による早期リターン"
+  requires: [rust.error-handling]
+  source: TRPL Ch.9.2
+  lang: rust
+  code: |
+    use std::num::ParseIntError;
+
+    fn parse_sum(a: &str, b: &str) -> Result<i32, ParseIntError> {
+        let x: i32 = a.parse()?;
+        let y: i32 = b.parse()?;
+        Ok(x + y)
+    }
+
+    fn main() {
+        println!("{:?}", parse_sum("2", "40"));
+        println!("{}", parse_sum("2", "x").is_err());
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "42 と true"
+      - "Ok(42) と true"
+      - "Ok(42) と出力された後、パニックする"
+      - "Ok(42) と false"
+    value: 1
+  explanation: |-
+    最初の呼び出しは両方とも数として読めるので `Ok(42)`（`{:?}` なので `Ok(...)` 付きで表示）。2つめは `"x".parse()` が `Err` を返し、`?` がそのまま `Err` を返すので `is_err()` は `true`。パニックはしない。
+  verify:
+    stdout: "Ok(42)\ntrue\n"
+
+- id: rust.modules
+  kind: definition
+  subject: rust
+  title: モジュール・可視性・クレート
+  requires: [rust.struct]
+  source: TRPL Ch.7, Ch.14
+  statement: |-
+    - `mod geometry;` で `src/geometry.rs`（または `src/geometry/mod.rs`）をモジュールとして取り込む
+    - 要素は**既定で非公開**。外から使わせるものに `pub` を付ける（構造体のフィールドも個別に `pub`）
+    - `use crate::geometry::Point;` でパスを短くする。`crate` は自分のクレートの根、`super` は親モジュール
+    - 外部ライブラリ（クレート）は `Cargo.toml` の `[dependencies]` に書き、crates.io から取得される
+  questions:
+    - q: |-
+        構造体のフィールドを `pub` にせず、`new` とメソッドだけ公開する利点は？
+      a: |-
+        不変条件（例: 分母は 0 でない）を `new` で検査すれば、外部から不正な値を作れなくなる。C++ の `private` メンバと同じ考え方。
+
+- id: rust.testing
+  kind: definition
+  subject: rust
+  title: テスト
+  requires: [rust.modules]
+  source: TRPL Ch.11
+  why: |-
+    テストが言語とツールに組み込まれているので、書くための準備がいらない。数値計算や解析コードも、性質（不変量）をテストに書いておくとリファクタリングで壊れない。
+  statement: |-
+    ```
+    pub fn gcd(a: u64, b: u64) -> u64 { if b == 0 { a } else { gcd(b, a % b) } }
+
+    #[cfg(test)]           // cargo test のときだけコンパイル
+    mod tests {
+        use super::*;
+        #[test]
+        fn small() { assert_eq!(gcd(12, 18), 6); }
+        #[test]
+        #[should_panic]
+        fn empty_index() { let v: Vec<u64> = Vec::new(); let _ = v[0]; }
+    }
+    ```
+    `cargo test` で単体テスト、`tests/` ディレクトリの結合テスト、ドキュメントコメント中のコード例（doctest）がすべて実行される。
+  questions:
+    - q: |-
+        `gcd` に対して、具体的な値の他に書いておくと良い性質のテストを挙げよ。
+      a: |-
+        $\gcd(a, b) = \gcd(b, a)$、$\gcd(a, b)$ が $a$ と $b$ を割り切る、$\gcd(a, 0) = a$ など。乱数で多数の入力を作って確かめる（性質ベーステスト。`proptest` クレート）。
+
+- id: rust.threads
+  kind: definition
+  subject: rust
+  title: スレッドと Send / Sync
+  requires: [rust.closures, rust.rc-refcell]
+  source: TRPL Ch.16
+  why: |-
+    Rust ではデータ競合がコンパイルエラーになる（"fearless concurrency"）。C++ ではツールで探すしかないバグを型で防いでいる。
+  statement: |-
+    ```
+    let h = std::thread::spawn(move || heavy_work(data));
+    let result = h.join().unwrap();        // 終了を待ち、戻り値を受け取る
+
+    std::thread::scope(|s| {                // スコープ付きスレッド: ローカル変数を借用できる
+        s.spawn(|| sum(&v[..mid]));
+        s.spawn(|| sum(&v[mid..]));
+    });
+    ```
+    - `Send`: 別スレッドへ**所有権を移せる**型。`Sync`: 別スレッドから**共有参照で使える**型。コンパイラが自動で判定する
+    - `Rc` は非アトミックなカウントなので `Send` でない → スレッド間では `Arc`
+    - 共有して変更するなら `Arc<Mutex<T>>`。メッセージで受け渡すなら `std::sync::mpsc::channel`
+  questions:
+    - q: |-
+        `Mutex` のロックを解除し忘れることが Rust ではなぜ起きにくいか？
+      a: |-
+        `lock()` が返すガードが `Drop` でロックを解除する（RAII）ので、スコープを抜ければ必ず解除される。中身にはガード経由でしか触れないので、ロックせずに触ることもできない。
+
+- id: rust.spawn-move
+  kind: code
+  subject: rust
+  title: スレッドに借用を渡す
+  requires: [rust.threads]
+  source: TRPL Ch.16.1
+  lang: rust
+  code: |
+    use std::thread;
+
+    fn main() {
+        let v = vec![1, 2, 3];
+        let h = thread::spawn(|| {
+            println!("{:?}", v);
+        });
+        h.join().unwrap();
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "[1, 2, 3] と出力される"
+      - コンパイルエラー（クロージャが v を借用したまま長生きしうる）
+      - 実行時にパニックする
+    value: 1
+  explanation: |-
+    `thread::spawn` のクロージャは `'static` でなければならない（スレッドがいつまで動くか分からないため）。`v` への借用を持ち込もうとしてエラー E0373。`move ||` で `v` の所有権をスレッドに移すか、`thread::scope` を使う。
+  verify:
+    build: error
+
+- id: rust.rc-not-send
+  kind: code
+  subject: rust
+  title: Rc はスレッドに渡せない
+  requires: [rust.threads]
+  source: TRPL Ch.16.3
+  lang: rust
+  code: |
+    use std::rc::Rc;
+    use std::thread;
+
+    fn main() {
+        let a = Rc::new(5);
+        let b = Rc::clone(&a);
+        let h = thread::spawn(move || {
+            println!("{}", b);
+        });
+        h.join().unwrap();
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "5 と出力される"
+      - コンパイルエラー（Rc<i32> は Send でない）
+      - まれにカウントが壊れて二重解放する
+    value: 1
+  explanation: |-
+    `Rc` の参照カウントは非アトミックで、2つのスレッドから同時に増減すると壊れうる。そこで `Rc` は `Send` を実装しておらず、別スレッドへ移そうとするとエラー E0277。`std::sync::Arc` に変えれば通る。
+    C++ なら同様の誤用（非スレッド安全なオブジェクトの共有）はコンパイルが通ってしまう。
+  verify:
+    build: error
+
+- id: rust.arc-mutex
+  kind: code
+  subject: rust
+  title: Arc<Mutex<T>> で共有カウンタ
+  requires: [rust.threads]
+  source: TRPL Ch.16.3
+  lang: rust
+  code: |
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+
+    fn main() {
+        let counter = Arc::new(Mutex::new(0));
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                let c = Arc::clone(&counter);
+                thread::spawn(move || {
+                    for _ in 0..1000 {
+                        *c.lock().unwrap() += 1;
+                    }
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap();
+        }
+        println!("{}", *counter.lock().unwrap());
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "4000"
+      - "1000"
+      - "4000 以下の不定な値"
+    value: 0
+  explanation: |-
+    `Mutex` で守られているので更新は失われず $4 \times 1000 = 4000$。`Arc` は複数スレッドで所有権を共有するための、アトミックな参照カウント。
+    `map` で `spawn` を `collect` してから `join` しているのがポイント。`for` の中で `spawn` してすぐ `join` すると並列にならない。
+  verify:
+    stdout: "4000\n"
+
+- id: rust.unsafe
+  kind: definition
+  subject: rust
+  title: unsafe Rust
+  requires: [rust.threads, rust.lifetimes]
+  source: TRPL Ch.20.1
+  why: |-
+    OS・ドライバ・高速なデータ構造・C ライブラリとの連携では避けられない。セキュリティ監査では `unsafe` ブロックが重点的に読まれる場所になる。
+  statement: |-
+    `unsafe` ブロックの中でだけ許される操作:
+    1. 生ポインタ `*const T` / `*mut T` の参照外し
+    2. `unsafe` な関数（C の関数 FFI を含む）の呼び出し
+    3. 可変な `static` 変数へのアクセス
+    4. `unsafe` なトレイトの実装、`union` のフィールドの読み出し
+
+    借用チェックが無効になるわけではない。**コンパイラが確かめられない前提を、プログラマが保証する**という宣言。`unsafe` は小さく閉じ込め、安全な API で包み、なぜ安全かを `// SAFETY:` コメントに書く。
+  questions:
+    - q: |-
+        `unsafe` を含むコードの未定義動作を検出するツールは？
+      a: |-
+        Miri（`cargo +nightly miri test`）。Rust の中間表現を解釈実行して、範囲外アクセス・解放後使用・別名規則違反などを検出する。AddressSanitizer なども使える。
+
+- id: rust.parse-kv
+  kind: exercise
+  subject: rust
+  title: 設定ファイルの読み取りとエラー型
+  requires: [rust.error-handling, rust.hashmap]
+  source: エラー処理の総合演習
+  lang: rust
+  prompt: |-
+    `key = value` 形式の行からなるテキストを `HashMap<String, i64>` に読み込む関数を書け。空行と `#` で始まる行は無視する。
+    失敗したら、何行目のどんなエラーかを持つ独自のエラー型 `ConfigError` を返す（`=` がない → `MissingEq(行番号)`、値が整数でない → `BadValue(行番号, 値の文字列)`、同じキーが2回 → `Duplicate(キー)`）。行番号は 1 から数える。
+  starter: |
+    use std::collections::HashMap;
+    use std::fmt;
+
+    // ---- 解答欄 ----
+    #[derive(Debug, PartialEq)]
+    enum ConfigError {
+        MissingEq(usize),
+        BadValue(usize, String),
+        Duplicate(String),
+    }
+
+    impl fmt::Display for ConfigError {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            todo!()
+        }
+    }
+
+    impl std::error::Error for ConfigError {}
+
+    fn parse_config(text: &str) -> Result<HashMap<String, i64>, ConfigError> {
+        todo!()
+    }
+    // ---- ここまで ----
+
+    fn main() {
+        let ok = parse_config("# comment\nwidth = 80\n\n height=24 \n").unwrap();
+        assert_eq!(ok.get("width"), Some(&80));
+        assert_eq!(ok.get("height"), Some(&24));
+        assert_eq!(ok.len(), 2);
+        assert_eq!(parse_config("a = 1\nb 2"), Err(ConfigError::MissingEq(2)));
+        assert_eq!(parse_config("a = x1"), Err(ConfigError::BadValue(1, "x1".to_string())));
+        assert_eq!(parse_config("a=1\na=2"), Err(ConfigError::Duplicate("a".to_string())));
+        assert_eq!(ConfigError::MissingEq(3).to_string(), "line 3: missing '='");
+        println!("all tests passed");
+    }
+  solution: |
+    #[derive(Debug, PartialEq)]
+    enum ConfigError {
+        MissingEq(usize),
+        BadValue(usize, String),
+        Duplicate(String),
+    }
+
+    impl fmt::Display for ConfigError {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match self {
+                ConfigError::MissingEq(l) => write!(f, "line {}: missing '='", l),
+                ConfigError::BadValue(l, v) => write!(f, "line {}: bad value '{}'", l, v),
+                ConfigError::Duplicate(k) => write!(f, "duplicate key '{}'", k),
+            }
+        }
+    }
+
+    impl std::error::Error for ConfigError {}
+
+    fn parse_config(text: &str) -> Result<HashMap<String, i64>, ConfigError> {
+        let mut map = HashMap::new();
+        for (i, raw) in text.lines().enumerate() {
+            let line = raw.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let (k, v) = line.split_once('=').ok_or(ConfigError::MissingEq(i + 1))?;
+            let (k, v) = (k.trim(), v.trim());
+            let n: i64 = v.parse().map_err(|_| ConfigError::BadValue(i + 1, v.to_string()))?;
+            if map.insert(k.to_string(), n).is_some() {
+                return Err(ConfigError::Duplicate(k.to_string()));
+            }
+        }
+        Ok(map)
+    }
+  checklist:
+    - すべての assert_eq! が通った
+    - "`ok_or` と `map_err` で `Option` やライブラリのエラーを自分のエラー型に変換できた"
+    - "`impl From<ParseIntError> for ConfigError` を書くと `?` だけで変換できることを説明できる（ただし行番号は持てない）"

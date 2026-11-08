@@ -1,0 +1,380 @@
+# C++ 0: 基本構文
+# 出典: learncpp.com, cppreference.com
+
+- id: cpp.program
+  kind: definition
+  subject: cpp
+  title: C++ プログラムの構造とビルド
+  requires: []
+  source: learncpp.com Ch.0–2
+  why: |-
+    コンパイル・リンク・警告の意味が分かると、エラーメッセージから原因にたどり着ける。デバッグの最初の一歩。
+  statement: |-
+    C++ のプログラムは `main` 関数から実行が始まる。
+    ```
+    #include <iostream>   // 標準ライブラリのヘッダを取り込む
+
+    int main() {
+        std::cout << "hello\n";   // std 名前空間の cout に出力
+        return 0;                 // 0 は正常終了（省略すると 0）
+    }
+    ```
+    ソースは**プリプロセス → コンパイル（翻訳単位ごと）→ リンク**の順に実行ファイルになる。
+    練習では `g++ -std=c++20 -Wall -Wextra -pedantic-errors -g main.cpp` のように、警告を有効にし、規格違反をエラーにしてコンパイルする。
+  questions:
+    - q: |-
+        「undefined reference to `foo()`」というエラーはどの段階で起きているか？
+      a: |-
+        リンク。宣言はあってコンパイルは通ったが、定義が見つからない（定義を書き忘れた、そのソースファイルをビルドに含めていないなど）。
+    - q: |-
+        ヘッダファイルで `using namespace std;` を書くのが嫌われる理由は？
+      a: |-
+        そのヘッダを取り込んだすべてのファイルに `std` の名前がばらまかれ、自分の関数名（`count`, `distance` など）と衝突して、意図しない関数が呼ばれたりエラーになったりする。
+
+- id: cpp.types
+  kind: definition
+  subject: cpp
+  title: 基本型と整数演算
+  requires: [cpp.program]
+  source: learncpp.com Ch.4
+  statement: |-
+    主な基本型: `bool`, `char`, `int`, `long long`, `double`, `std::size_t`（大きさ・添字用の符号なし整数）。
+    - 大きさは処理系依存（`int` は多くの環境で 32 ビット）。幅を固定したいときは `<cstdint>` の `std::int64_t` などを使う
+    - 整数どうしの `/` は小数部を**0 の方向へ切り捨て**、`%` の符号は割られる数と同じ
+    - 型の違う値を混ぜると暗黙に変換される（`int` と `double` なら `double` に、符号付きと符号なしなら多くは符号なしに）
+  questions:
+    - q: |-
+        `-1 < 1u` の値は？（`1u` は `unsigned int`）
+      a: |-
+        `false`。`-1` が `unsigned` に変換されて $2^{32} - 1$ になるため。符号付きと符号なしの比較は `-Wsign-compare` で警告される典型的なバグ源。
+    - q: |-
+        平均 `(a + b) / 2` を `int` で計算すると危ない場合は？
+      a: |-
+        `a + b` が `int` の範囲を超えると符号付きオーバーフロー（未定義動作）。二分探索では `a + (b - a) / 2` と書く。C++20 なら `std::midpoint`。
+
+- id: cpp.int-division
+  kind: code
+  subject: cpp
+  title: 整数の割り算と剰余
+  requires: [cpp.types]
+  source: cppreference.com "Arithmetic operators"
+  lang: cpp
+  code: |
+    #include <iostream>
+
+    int main() {
+        std::cout << 7 / 2 << ' ' << -7 / 2 << ' ' << -7 % 2 << ' ' << 7.0 / 2 << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "3 -4 1 3.5"
+      - "3 -3 -1 3.5"
+      - "3 -3 1 3"
+      - "3.5 -3.5 -1 3.5"
+    value: 1
+  explanation: |-
+    整数の割り算は 0 方向への切り捨てなので $-7/2 = -3$、剰余は `a == (a / b) * b + a % b` を満たすように決まるので $-7 \% 2 = -1$。片方が `double` なら浮動小数点の割り算で $3.5$。
+    数学の $\bmod$（常に $0$ 以上）が欲しいときは `((a % n) + n) % n` と書く。Python の `//` や `%` とは負の数での結果が違うので注意。
+  verify:
+    stdout: "3 -3 -1 3.5\n"
+
+- id: cpp.init
+  kind: definition
+  subject: cpp
+  title: 変数の初期化
+  requires: [cpp.types]
+  source: learncpp.com Ch.1.4, cppreference.com "Initialization"
+  statement: |-
+    ```
+    int a = 1;      // コピー初期化
+    int b{2};       // 波括弧（リスト）初期化: 縮小変換を禁止
+    auto c = 3.0;   // 型推論（double）
+    int d;          // ローカル変数なら値は不定。読むと未定義動作
+    ```
+    波括弧初期化は `int x{3.5};` のような**情報が失われる変換（縮小変換）をコンパイルエラー**にしてくれる。迷ったら波括弧で必ず初期化する。
+  questions:
+    - q: |-
+        初期化していないローカル変数を読むバグを見つける方法を2つ挙げよ。
+      a: |-
+        コンパイラ警告（`-Wall` の `-Wuninitialized`／`-Wmaybe-uninitialized`、最適化を有効にすると検出が増える）、Valgrind や MemorySanitizer（Clang の `-fsanitize=memory`）。そもそも宣言と同時に初期化する習慣が一番効く。
+
+- id: cpp.narrowing
+  kind: code
+  subject: cpp
+  title: 縮小変換と波括弧初期化
+  requires: [cpp.init]
+  source: cppreference.com "List-initialization"
+  lang: cpp
+  code: |
+    #include <iostream>
+
+    int main() {
+        double d = 3.7;
+        int a = d;
+        int b{d};
+        std::cout << a << ' ' << b << '\n';
+    }
+  prompt: |-
+    `g++ -std=c++20 -pedantic-errors`（または clang++）でコンパイルするとどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "3 3 と出力される"
+      - "4 4 と出力される"
+      - コンパイルエラー（int b{d} が縮小変換）
+      - 実行時エラー
+    value: 2
+  explanation: |-
+    `int a = d;` は暗黙変換で小数部が切り捨てられ（$3$）、コンパイルは通る。`int b{d};` は `double` から `int` への縮小変換で、規格上は不正なプログラム。Clang はエラーにする。
+    GCC は既定では**警告だけ**でコンパイルを通してしまう（`-Wnarrowing`）。`-pedantic-errors` か `-Werror=narrowing` を付けるとエラーになる。警告を無視しない・規格違反をエラーにする設定で練習しよう。
+    意図して変換するときは `static_cast<int>(d)` と明示する。四捨五入なら `std::lround(d)`。
+  verify:
+    build: error
+
+- id: cpp.references-pointers
+  kind: definition
+  subject: cpp
+  title: 参照とポインタ
+  requires: [cpp.init]
+  source: learncpp.com Ch.12
+  why: |-
+    メモリ上のどこを指しているかを意識できることが、ダングリングや二重解放のバグを読み解く前提になる。
+  statement: |-
+    **参照** `T&` は既存のオブジェクトの別名。必ず初期化が必要で、あとから別のものを指し直せない。
+    **ポインタ** `T*` はアドレスを値として持つ変数。`&x` でアドレスをとり、`*p` で指す先を読む。`nullptr`（何も指さない）になりうる。
+    ```
+    int x = 1;
+    int& r = x;    // r は x の別名
+    int* p = &x;   // p は x のアドレス
+    r = 2;         // x が 2 になる
+    *p = 3;        // x が 3 になる
+    p = nullptr;   // ポインタは指し直せる
+    ```
+  questions:
+    - q: |-
+        関数の引数で、参照ではなくポインタを使うのはどんなときか？
+      a: |-
+        「何も渡さない」ことを許したいとき（`nullptr` を渡せる）や、C の API とやりとりするとき。所有権を表したいときはスマートポインタ、省略可能な値なら `std::optional` を検討する。
+
+- id: cpp.pass-by
+  kind: code
+  subject: cpp
+  title: 値渡し・参照渡し・ポインタ渡し
+  requires: [cpp.references-pointers]
+  source: learncpp.com Ch.12
+  lang: cpp
+  code: |
+    #include <iostream>
+
+    void a(int x) { x += 1; }
+    void b(int& x) { x += 10; }
+    void c(int* p) { *p += 100; }
+
+    int main() {
+        int v = 0;
+        a(v);
+        b(v);
+        c(&v);
+        std::cout << v << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "0"
+      - "110"
+      - "111"
+      - "100"
+    value: 1
+  explanation: |-
+    `a` は値渡しなのでコピーを変更するだけで `v` は変わらない。`b` は参照渡し、`c` はポインタ経由で `v` 自体を変更する。$0 + 10 + 100 = 110$。
+    大きなオブジェクトを読むだけなら `const T&` で渡してコピーを避けるのが定石。
+  verify:
+    stdout: "110\n"
+
+- id: cpp.const
+  kind: definition
+  subject: cpp
+  title: const と const 参照
+  requires: [cpp.references-pointers]
+  source: learncpp.com Ch.5, Ch.12
+  statement: |-
+    `const` は「この名前を通しては変更しない」という約束で、破るとコンパイルエラーになる。
+    - `const int n = 10;` 定数
+    - `void f(const std::vector<int>& v)` コピーせずに受け取り、変更しない
+    - `const int* p` 指す先を変更できない／`int* const p` ポインタ自体を指し直せない
+    - メンバ関数の `const`（`int size() const;`）はオブジェクトを変更しない関数
+  questions:
+    - q: |-
+        `const` を積極的に付けると何がうれしいか？
+      a: |-
+        変更されない値が型で保証され、読む人もコンパイラも推論しやすい。うっかり変更するバグがコンパイル時に見つかる。`const` オブジェクトからは `const` メンバ関数しか呼べないので、設計の誤りにも気づける。
+
+- id: cpp.const-error
+  kind: code
+  subject: cpp
+  title: const 参照の引数を変更する
+  requires: [cpp.const]
+  source: cppreference.com "cv type qualifiers"
+  lang: cpp
+  code: |
+    #include <iostream>
+    #include <vector>
+
+    void add_one(const std::vector<int>& v) {
+        v.push_back(1);
+    }
+
+    int main() {
+        std::vector<int> v;
+        add_one(v);
+        std::cout << v.size() << '\n';
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "1 と出力される"
+      - "0 と出力される"
+      - コンパイルエラー
+    value: 2
+  explanation: |-
+    `v` は `const` 参照なので、`const` でないメンバ関数 `push_back` は呼べずコンパイルエラーになる。変更したいなら `std::vector<int>&` で受け取る。
+  verify:
+    build: error
+
+- id: cpp.control
+  kind: definition
+  subject: cpp
+  title: 制御構文
+  requires: [cpp.types]
+  source: learncpp.com Ch.8
+  statement: |-
+    ```
+    if (x > 0) { ... } else if (x == 0) { ... } else { ... }
+    for (int i = 0; i < n; ++i) { ... }
+    for (const auto& e : v) { ... }        // 範囲 for
+    while (cond) { ... }
+    switch (k) {
+        case 1: ...; break;                 // break がないと次の case に落ちる
+        case 2: ...; [[fallthrough]];       // 意図的に落とすときは明示
+        default: ...;
+    }
+    ```
+    条件式 `c ? a : b`、ループを抜ける `break`、次の反復へ進む `continue` も使う。
+  questions:
+    - q: |-
+        `if (x = 0)` と書いてしまうと何が起きるか？
+      a: |-
+        代入式なので `x` に $0$ が入り、条件は常に偽になる。`-Wall`（`-Wparentheses`）で警告されるので、警告を無視しないことが大事。
+
+- id: cpp.switch-fallthrough
+  kind: code
+  subject: cpp
+  title: switch のフォールスルー
+  requires: [cpp.control]
+  source: cppreference.com "switch statement"
+  lang: cpp
+  code: |
+    #include <iostream>
+
+    int main() {
+        int x = 2;
+        switch (x) {
+            case 1: std::cout << "a";
+            case 2: std::cout << "b";
+            case 3: std::cout << "c"; break;
+            default: std::cout << "d";
+        }
+        std::cout << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "b"
+      - "bc"
+      - "bcd"
+      - "abc"
+    value: 1
+  explanation: |-
+    `case 2` から実行が始まり、`break` がないので `case 3` に落ちて `c` も出力し、そこで `break`。
+    `-Wimplicit-fallthrough`（`-Wextra` に含まれる）で警告される。意図したときは `[[fallthrough]];` と書く。
+  verify:
+    stdout: "bc\n"
+
+- id: cpp.functions
+  kind: definition
+  subject: cpp
+  title: 関数・オーバーロード・既定引数
+  requires: [cpp.pass-by]
+  source: learncpp.com Ch.2, Ch.11
+  statement: |-
+    - **宣言**（`int f(int);`）は型を知らせ、**定義**は本体を与える。定義はプログラム全体で1つ（ODR）
+    - 引数の型や個数が違えば同じ名前で複数定義できる（**オーバーロード**）。呼び出し時に最も合うものが選ばれる
+    - 既定引数 `void log(const std::string& s, int level = 0);`
+    - 戻り値の型推論 `auto f() { return 1.0; }`
+    - ヘッダには宣言、`.cpp` に定義を書くのが基本（`inline` 関数やテンプレートはヘッダに定義を書く）
+  questions:
+    - q: |-
+        `void f(int); void f(double);` があるとき `f('a')` と `f(1.0f)` はどちらが呼ばれるか？
+      a: |-
+        `f('a')` は `char` → `int` の整数昇格で `f(int)`。`f(1.0f)` は `float` → `double` の浮動小数点昇格で `f(double)`。昇格は変換より優先される。
+
+- id: cpp.arrays
+  kind: definition
+  subject: cpp
+  title: 配列・std::array・std::vector
+  requires: [cpp.references-pointers, cpp.control]
+  source: learncpp.com Ch.16–17
+  statement: |-
+    - C の配列 `int a[10];` は大きさ固定。関数に渡すと**先頭要素へのポインタに変換**され、大きさの情報が失われる
+    - `std::array<int, 10>` は大きさ固定で、値として扱え、`.size()` がある
+    - `std::vector<int>` は大きさ可変（ヒープに確保）。迷ったらこれ
+    - 範囲外アクセス `a[10]` は未定義動作。`.at(i)` は範囲を検査して例外 `std::out_of_range` を投げる
+  questions:
+    - q: |-
+        デバッグ中だけ `operator[]` の範囲外アクセスを検出する方法は？
+      a: |-
+        libstdc++ なら `-D_GLIBCXX_DEBUG`（または `-D_GLIBCXX_ASSERTIONS`）を付けてビルドする。AddressSanitizer でも検出できる。
+
+- id: cpp.sizeof-decay
+  kind: code
+  subject: cpp
+  title: 配列のポインタへの変換（decay）
+  requires: [cpp.arrays]
+  source: cppreference.com "Array-to-pointer conversion"
+  lang: cpp
+  code: |
+    #include <iostream>
+
+    void f(int a[10]) {
+        std::cout << sizeof(a) / sizeof(a[0]) << '\n';
+    }
+
+    int main() {
+        int a[10] = {};
+        std::cout << sizeof(a) / sizeof(a[0]) << ' ';
+        f(a);
+    }
+  prompt: |-
+    64 ビット環境（`int` が 4 バイト、ポインタが 8 バイト）での出力は？
+  answer:
+    type: choice
+    choices:
+      - "10 10"
+      - "10 2"
+      - "40 40"
+      - "10 1"
+    value: 1
+  explanation: |-
+    `main` の `a` は配列なので `sizeof(a)` は $40$ バイトで、要素数 $10$。`f` の引数 `int a[10]` は実は `int* a` と同じ意味なので `sizeof(a)` はポインタの大きさ $8$、$8/4 = 2$。
+    GCC は `-Wsizeof-array-argument` で警告する。大きさを保ったまま渡すには `std::array`、`std::span<int>`（C++20）、または `std::vector` を使う。
+  verify:
+    stdout: "10 2\n"

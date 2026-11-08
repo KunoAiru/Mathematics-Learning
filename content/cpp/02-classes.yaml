@@ -1,0 +1,413 @@
+# C++ 2: クラスと構造体・オブジェクトの一生・継承
+# 出典: learncpp.com, cppreference.com
+
+- id: cpp.class
+  kind: definition
+  subject: cpp
+  title: クラスと構造体
+  requires: [cpp.functions, cpp.const]
+  source: learncpp.com Ch.13–14
+  why: |-
+    データと「それを正しく保つ操作」をまとめると、不正な状態（不変条件の破れ）をクラスの外から作れなくなる。大きなコードを壊さずに育てるための基本単位。
+  statement: |-
+    ```
+    class Account {
+    public:
+        explicit Account(long long initial) : balance_{initial} {}
+        void deposit(long long x) { if (x > 0) balance_ += x; }
+        long long balance() const { return balance_; }
+    private:
+        long long balance_;   // 外から直接書き換えられない
+    };
+    ```
+    `struct` と `class` の違いは**既定のアクセス指定だけ**（`struct` は `public`、`class` は `private`）。慣習として、不変条件のない単なるデータの集まりは `struct`、守るべき不変条件があるものは `class` にする。
+  questions:
+    - q: |-
+        メンバ変数を `private` にしてゲッターを用意する利点は？
+      a: |-
+        値を変える経路が限られるので、「残高は負にならない」のような不変条件をクラス内だけで保証できる。内部表現を後から変えても使う側のコードを直さずに済む。
+
+- id: cpp.constructor
+  kind: definition
+  subject: cpp
+  title: コンストラクタとメンバ初期化子リスト
+  requires: [cpp.class]
+  source: learncpp.com Ch.14
+  statement: |-
+    コンストラクタはオブジェクトを作るときに呼ばれ、不変条件を確立する。
+    ```
+    struct Point {
+        double x, y;
+        Point() : x{0}, y{0} {}                       // 既定コンストラクタ
+        Point(double x_, double y_) : x{x_}, y{y_} {} // メンバ初期化子リスト
+    };
+    ```
+    - メンバは本体 `{}` に入る前に初期化子リストで初期化される（本体での代入より効率的で、`const` メンバや参照メンバはこれでしか初期化できない）
+    - 初期化の順番は**初期化子リストの並びではなく、メンバの宣言順**
+    - 引数1つのコンストラクタには `explicit` を付けて、意図しない暗黙変換を防ぐ
+  questions:
+    - q: |-
+        `explicit` を付けないと、`void f(Account a);` に対して `f(100);` はどうなるか？
+      a: |-
+        `Account(100)` が暗黙に作られて呼び出しが通ってしまう。金額の整数をそのまま口座として渡すような取り違えを防ぐため `explicit` を付ける。
+
+- id: cpp.init-order
+  kind: code
+  subject: cpp
+  title: メンバの初期化順
+  requires: [cpp.constructor]
+  source: cppreference.com "Constructors and member initializer lists"
+  lang: cpp
+  code: |
+    #include <iostream>
+
+    struct Logger {
+        Logger(const char* s) { std::cout << s; }
+    };
+
+    struct S {
+        Logger x{"x"};
+        Logger y{"y"};
+        S() : y("Y"), x("X") {}
+    };
+
+    int main() {
+        S s;
+        std::cout << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "YX"
+      - "XY"
+      - "xyYX"
+      - "xy"
+    value: 1
+  explanation: |-
+    メンバは宣言順（`x` → `y`）に初期化される。初期化子リストに書いたものが既定のメンバ初期化子 `{"x"}` より優先されるので、`X` → `Y`。
+    初期化子リストを宣言順と違う順で書くと `-Wreorder` で警告される。あるメンバの初期化に別のメンバを使うときは特に注意。
+  verify:
+    stdout: "XY\n"
+
+- id: cpp.lifetime
+  kind: code
+  subject: cpp
+  title: デストラクタが呼ばれる順番
+  requires: [cpp.constructor, cpp.raii]
+  source: cppreference.com "Destructors"
+  lang: cpp
+  code: |
+    #include <iostream>
+
+    struct T {
+        char c;
+        T(char c) : c(c) { std::cout << c; }
+        ~T() { std::cout << char(c - 'a' + 'A'); }
+    };
+
+    int main() {
+        T a('a');
+        {
+            T b('b');
+        }
+        T c('c');
+        std::cout << '|';
+    }
+  prompt: |-
+    出力は何か？（コンストラクタで小文字、デストラクタで大文字を出す）
+  answer:
+    type: choice
+    choices:
+      - "abcBCA|"
+      - "abBc|CA"
+      - "abBc|AC"
+      - "abc|ABC"
+    value: 1
+  explanation: |-
+    自動変数はスコープを抜けるときに、**作られたのと逆の順番**で破棄される。`b` は内側のブロックを抜けた時点で `B`。`main` の終わりで `c`、`a` の順に `C`、`A`。
+    この「必ず逆順に後片付けされる」性質が RAII の土台。
+  verify:
+    stdout: "abBc|CA"
+
+- id: cpp.rule-of-five
+  kind: definition
+  subject: cpp
+  title: 特殊メンバ関数（0・3・5 の規則）
+  requires: [cpp.lifetime]
+  source: cppreference.com "The rule of three/five/zero"
+  why: |-
+    生のポインタでリソースを持つクラスを既定のコピーのまま使うと、二重解放や use-after-free になる。脆弱性の定番パターン。
+  statement: |-
+    コンパイラが自動で作りうる特殊メンバ関数: デストラクタ、コピーコンストラクタ、コピー代入、ムーブコンストラクタ、ムーブ代入。
+    - **0 の規則**: リソースは `std::vector` や `std::unique_ptr` などに持たせ、5つとも自分で書かない（既定のもので正しく動く）
+    - **3/5 の規則**: どれか1つ（特にデストラクタ）を自分で書く必要があるなら、残りも書くか `= delete` で禁止する
+    ```
+    struct NoCopy {
+        NoCopy(const NoCopy&) = delete;
+        NoCopy& operator=(const NoCopy&) = delete;
+    };
+    ```
+  questions:
+    - q: |-
+        生のポインタ `int* data_` を持ち、デストラクタで `delete[] data_` するクラスを既定のコピーでコピーすると何が起きるか？
+      a: |-
+        ポインタの値だけがコピーされ（浅いコピー）、2つのオブジェクトが同じ領域を指す。両方のデストラクタが `delete[]` するので二重解放（未定義動作）。片方が先に破棄されれば、もう片方は use-after-free になる。
+
+- id: cpp.inheritance
+  kind: definition
+  subject: cpp
+  title: 継承と仮想関数
+  requires: [cpp.class]
+  source: learncpp.com Ch.24–25
+  statement: |-
+    ```
+    struct Shape {
+        virtual double area() const = 0;   // 純粋仮想関数（Shape は抽象クラス）
+        virtual ~Shape() = default;        // 基底クラスのデストラクタは virtual に
+    };
+    struct Circle : Shape {
+        double r;
+        explicit Circle(double r) : r{r} {}
+        double area() const override { return 3.14159265 * r * r; }
+    };
+    ```
+    `virtual` 関数は、基底クラスの参照・ポインタ経由で呼んでも**実際のオブジェクトの型**の関数が呼ばれる（動的ディスパッチ）。`override` を付けると、シグネチャの書き間違いでオーバーライドになっていない場合にエラーになる。
+  questions:
+    - q: |-
+        基底クラスのデストラクタが `virtual` でないと何が問題か？
+      a: |-
+        `Shape* p = new Circle(1); delete p;` のように基底クラスのポインタで削除すると未定義動作になる（実際には派生クラスのデストラクタが呼ばれず、リソースがリークすることが多い）。
+    - q: |-
+        仮想関数の呼び出しのコストは？
+      a: |-
+        オブジェクトが持つ仮想関数表（vtable）へのポインタをたどる間接呼び出しになり、インライン展開されにくい。ほとんどの場合は小さいが、内側のループで大量に呼ぶ数値計算ではテンプレートによる静的な多態性が選ばれることもある。
+
+- id: cpp.virtual-dispatch
+  kind: code
+  subject: cpp
+  title: virtual の有無と呼ばれる関数
+  requires: [cpp.inheritance]
+  source: cppreference.com "virtual function specifier"
+  lang: cpp
+  code: |
+    #include <iostream>
+
+    struct Base {
+        void f() { std::cout << "Bf "; }
+        virtual void g() { std::cout << "Bg "; }
+        virtual ~Base() = default;
+    };
+
+    struct Derived : Base {
+        void f() { std::cout << "Df "; }
+        void g() override { std::cout << "Dg "; }
+    };
+
+    int main() {
+        Derived d;
+        Base& r = d;
+        r.f();
+        r.g();
+        std::cout << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "Bf Bg "
+      - "Df Dg "
+      - "Bf Dg "
+      - "Df Bg "
+    value: 2
+  explanation: |-
+    `f` は仮想関数ではないので、参照の型（`Base`）で呼ぶ関数が決まる（静的束縛）。`g` は仮想関数なので実際のオブジェクトの型（`Derived`）のものが呼ばれる。
+    `Derived::f` は `Base::f` を**隠している**だけでオーバーライドではない。`override` を付けようとするとエラーになるので気づける。
+  verify:
+    stdout: "Bf Dg \n"
+
+- id: cpp.slicing
+  kind: code
+  subject: cpp
+  title: オブジェクトのスライシング
+  requires: [cpp.virtual-dispatch]
+  source: learncpp.com Ch.25.9
+  lang: cpp
+  code: |
+    #include <iostream>
+    #include <string>
+
+    struct Animal {
+        virtual std::string name() const { return "animal"; }
+        virtual ~Animal() = default;
+    };
+    struct Dog : Animal {
+        std::string name() const override { return "dog"; }
+    };
+
+    void by_value(Animal a) { std::cout << a.name() << ' '; }
+    void by_ref(const Animal& a) { std::cout << a.name() << '\n'; }
+
+    int main() {
+        Dog d;
+        by_value(d);
+        by_ref(d);
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "dog dog"
+      - "animal dog"
+      - "animal animal"
+      - "dog animal"
+    value: 1
+  explanation: |-
+    値渡しでは `Dog` の `Animal` 部分だけがコピーされ（スライシング）、できたのは純粋な `Animal` なので `animal`。参照渡しなら元の `Dog` を指すので `dog`。
+    多態的に使うクラスは参照かポインタで扱う。誤って値でコピーされないよう、基底クラスのコピーを `protected` にしたり `= delete` にしたりすることもある。
+  verify:
+    stdout: "animal dog\n"
+
+- id: cpp.operator-overload
+  kind: definition
+  subject: cpp
+  title: 演算子オーバーロード
+  requires: [cpp.class]
+  source: cppreference.com "operator overloading"
+  statement: |-
+    自作の型に `+`, `==`, `<<` などの意味を与えられる。
+    ```
+    struct Vec2 {
+        double x, y;
+        Vec2& operator+=(const Vec2& o) { x += o.x; y += o.y; return *this; }
+        friend Vec2 operator+(Vec2 a, const Vec2& b) { return a += b; }
+        bool operator==(const Vec2&) const = default;        // C++20
+        auto operator<=>(const Vec2&) const = default;       // 比較をまとめて生成
+    };
+    std::ostream& operator<<(std::ostream& os, const Vec2& v) {
+        return os << '(' << v.x << ", " << v.y << ')';
+    }
+    ```
+    `+=` をメンバで書き、`+` をそれで実装するのが定石。演算子は**普通の意味から外れた使い方をしない**（`+` で引き算をしない）。
+  questions:
+    - q: |-
+        `operator<<` をメンバ関数ではなく非メンバ関数として書くのはなぜか？
+      a: |-
+        左辺が `std::ostream` だから。メンバ関数にすると左辺が自分の型になり `v << std::cout` という不自然な書き方になってしまう。
+
+- id: cpp.spaceship
+  kind: code
+  subject: cpp
+  title: 既定の三方比較 <=> と並べ替え
+  requires: [cpp.operator-overload]
+  source: cppreference.com "Default comparisons"
+  lang: cpp
+  code: |
+    #include <algorithm>
+    #include <compare>
+    #include <iostream>
+    #include <vector>
+
+    struct P {
+        int x, y;
+        auto operator<=>(const P&) const = default;
+    };
+
+    int main() {
+        std::vector<P> v{{2, 1}, {1, 5}, {2, 0}, {1, 2}};
+        std::sort(v.begin(), v.end());
+        for (const auto& p : v) std::cout << p.x << p.y << ' ';
+        std::cout << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "10 12 15 21 "
+      - "12 15 20 21 "
+      - "20 21 12 15 "
+      - "15 12 21 20 "
+    value: 1
+  explanation: |-
+    既定の `<=>` はメンバを**宣言順に辞書式比較**する。まず `x`、同じなら `y` で比べるので $(1,2), (1,5), (2,0), (2,1)$ の順。
+    比較演算子を手書きすると不整合（`a < b` と `b < a` が両方真など）が起きやすく、`std::sort` の前提（狭義弱順序）が崩れると未定義動作になる。既定の比較を使えば安全。
+  verify:
+    stdout: "12 15 20 21 \n"
+
+- id: cpp.matrix
+  kind: exercise
+  subject: cpp
+  title: 行列クラスを実装する
+  requires: [cpp.operator-overload, cpp.rule-of-five, la.linear-map]
+  source: 演算子オーバーロードとクラス設計の総合演習
+  lang: cpp
+  prompt: |-
+    `std::vector<double>` で要素を持つ行列クラス `Matrix` を完成させよ（0 の規則に従い、特殊メンバ関数は書かない）。
+    - `Matrix(std::size_t rows, std::size_t cols)` 0 で埋めて作る
+    - `double& operator()(i, j)` と `const` 版で要素にアクセス
+    - `rows()`, `cols()`
+    - `Matrix operator*(const Matrix&, const Matrix&)`（大きさが合わなければ `std::invalid_argument` を投げる）
+    - `bool operator==`
+  starter: |
+    #include <cassert>
+    #include <iostream>
+    #include <stdexcept>
+    #include <vector>
+
+    // ---- 解答欄 ----
+    class Matrix {
+    public:
+        Matrix(std::size_t rows, std::size_t cols);
+        // TODO
+    };
+    // ---- ここまで ----
+
+    int main() {
+        Matrix a(2, 3), b(3, 2);
+        double av[] = {1, 2, 3, 4, 5, 6}, bv[] = {7, 8, 9, 10, 11, 12};
+        for (std::size_t i = 0; i < 2; ++i)
+            for (std::size_t j = 0; j < 3; ++j) { a(i, j) = av[i * 3 + j]; b(j, i) = bv[j * 2 + i]; }
+        Matrix c = a * b;
+        assert(c.rows() == 2 && c.cols() == 2);
+        assert(c(0, 0) == 58 && c(0, 1) == 64 && c(1, 0) == 139 && c(1, 1) == 154);
+        Matrix d = c;
+        assert(d == c);
+        d(0, 0) = 0;
+        assert(!(d == c));
+        bool thrown = false;
+        try { (void)(a * a); } catch (const std::invalid_argument&) { thrown = true; }
+        assert(thrown);
+        std::cout << "all tests passed\n";
+    }
+  solution: |
+    class Matrix {
+    public:
+        Matrix(std::size_t rows, std::size_t cols) : rows_{rows}, cols_{cols}, data_(rows * cols, 0.0) {}
+        std::size_t rows() const { return rows_; }
+        std::size_t cols() const { return cols_; }
+        double& operator()(std::size_t i, std::size_t j) { return data_[i * cols_ + j]; }
+        double operator()(std::size_t i, std::size_t j) const { return data_[i * cols_ + j]; }
+        bool operator==(const Matrix&) const = default;
+
+        friend Matrix operator*(const Matrix& a, const Matrix& b) {
+            if (a.cols_ != b.rows_) throw std::invalid_argument("size mismatch");
+            Matrix c(a.rows_, b.cols_);
+            for (std::size_t i = 0; i < a.rows_; ++i)
+                for (std::size_t k = 0; k < a.cols_; ++k)      // i-k-j の順はキャッシュに優しい
+                    for (std::size_t j = 0; j < b.cols_; ++j)
+                        c(i, j) += a(i, k) * b(k, j);
+            return c;
+        }
+
+    private:
+        std::size_t rows_, cols_;
+        std::vector<double> data_;   // 行優先で 1 本の配列に持つ
+    };
+  checklist:
+    - すべての assert が通った（`-DNDEBUG` を付けずにビルドすること）
+    - 要素を `std::vector<std::vector<double>>` ではなく1本の配列に持つ利点を説明できる
+    - ループの順番 i-j-k と i-k-j で速さが変わる理由（メモリアクセスの連続性）を説明できる

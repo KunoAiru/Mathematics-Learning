@@ -1,0 +1,219 @@
+# Rust 2: 構造体・列挙型・パターンマッチ
+# 出典: TRPL（無料公開）
+
+- id: rust.struct
+  kind: definition
+  subject: rust
+  title: 構造体とメソッド
+  requires: [rust.borrow]
+  source: TRPL Ch.5
+  statement: |-
+    ```
+    #[derive(Debug, Clone, PartialEq)]
+    struct Rect { w: f64, h: f64 }
+
+    impl Rect {
+        fn new(w: f64, h: f64) -> Self { Rect { w, h } }   // 関連関数（Rect::new で呼ぶ）
+        fn area(&self) -> f64 { self.w * self.h }           // 読むだけ: &self
+        fn scale(&mut self, k: f64) { self.w *= k; self.h *= k; } // 変更: &mut self
+        fn into_square(self) -> Rect { Rect { w: self.w, h: self.w } } // 所有権を受け取る: self
+    }
+    ```
+    メソッドの第1引数 `&self` / `&mut self` / `self` で、そのメソッドが値を「読むだけ」「変更する」「消費する」のどれかがシグネチャから分かる。タプル構造体 `struct Meters(f64);` は単位の取り違え防止（newtype パターン）に使う。
+  questions:
+    - q: |-
+        newtype パターン `struct UserId(u64);` を使う利点は？
+      a: |-
+        中身が同じ `u64` でも `UserId` と `OrderId` を取り違えて渡すとコンパイルエラーになる。実行時コストはゼロ。
+
+- id: rust.method-mut
+  kind: code
+  subject: rust
+  title: &mut self メソッドと不変な束縛
+  requires: [rust.struct]
+  source: TRPL Ch.5.3
+  lang: rust
+  code: |
+    struct Counter {
+        n: u32,
+    }
+
+    impl Counter {
+        fn inc(&mut self) {
+            self.n += 1;
+        }
+    }
+
+    fn main() {
+        let c = Counter { n: 0 };
+        c.inc();
+        println!("{}", c.n);
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "1 と出力される"
+      - "0 と出力される"
+      - コンパイルエラー
+    value: 2
+  explanation: |-
+    `inc` は `&mut self` を取るので、`c` を可変に借用する必要があるが、`c` は `mut` なしで宣言されている。エラー E0596。`let mut c` にすれば通る。
+  verify:
+    build: error
+
+- id: rust.enum
+  kind: definition
+  subject: rust
+  title: 列挙型と match
+  requires: [rust.struct]
+  source: TRPL Ch.6
+  why: |-
+    「この値は A か B か C のどれか」を型で表すと、場合分けの漏れをコンパイラが見つけてくれる。状態機械やプロトコルの実装で特に効く。
+  statement: |-
+    Rust の列挙型は、各バリアントがデータを持てる（代数的データ型）。
+    ```
+    enum Shape {
+        Circle { r: f64 },
+        Rect(f64, f64),
+        Empty,
+    }
+
+    fn area(s: &Shape) -> f64 {
+        match s {
+            Shape::Circle { r } => std::f64::consts::PI * r * r,
+            Shape::Rect(w, h) => w * h,
+            Shape::Empty => 0.0,
+        }
+    }
+    ```
+    `match` は**すべての場合を網羅しなければコンパイルエラー**。1つの場合だけ見たいときは `if let Some(x) = opt { ... }`、それ以外を早期リターンするなら `let Some(x) = opt else { return; };`。
+  questions:
+    - q: |-
+        `match` の最後に `_ => {}` を書いて網羅性を満たすことの欠点は？
+      a: |-
+        後で列挙型にバリアントを追加しても、すべて `_` に吸い込まれてコンパイラが教えてくれなくなる。可能な限りバリアントを列挙する。
+
+- id: rust.match-exhaustive
+  kind: code
+  subject: rust
+  title: match の網羅性
+  requires: [rust.enum]
+  source: TRPL Ch.6.2
+  lang: rust
+  code: |
+    enum Shape {
+        Circle(f64),
+        Rect(f64, f64),
+        Tri(f64, f64, f64),
+    }
+
+    fn sides(s: &Shape) -> u32 {
+        match s {
+            Shape::Circle(_) => 0,
+            Shape::Rect(_, _) => 4,
+        }
+    }
+
+    fn main() {
+        println!("{}", sides(&Shape::Tri(3.0, 4.0, 5.0)));
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "0 と出力される"
+      - "3 と出力される"
+      - 実行時にパニックする
+      - コンパイルエラー（Tri が網羅されていない）
+    value: 3
+  explanation: |-
+    `Shape::Tri(..)` の場合が `match` にないのでエラー E0004（non-exhaustive patterns）。C++ の `switch` なら警告で済むところを、Rust はエラーにする。
+  verify:
+    build: error
+
+- id: rust.patterns
+  kind: definition
+  subject: rust
+  title: パターン（分解・ガード・束縛）
+  requires: [rust.enum]
+  source: TRPL Ch.19
+  statement: |-
+    ```
+    match p {
+        (0, 0) => "原点",
+        (x, 0) | (0, x) if x > 0 => "正の軸上",   // | で複数、if でガード
+        (x, y) if x == y => "対角線上",
+        _ => "その他",
+    }
+    match n {
+        1..=9 => "1桁",                           // 範囲パターン
+        m @ 10..=99 => { println!("{}", m); "2桁" } // @ で値を束縛
+        _ => "それ以上",
+    }
+    let Point { x, .. } = pt;                     // .. で残りを無視
+    ```
+    `let`、関数の引数、`for` でもパターンで分解できる。
+  questions:
+    - q: |-
+        ガード付きの腕だけで網羅性は判定されるか？
+      a: |-
+        されない。コンパイラはガードの条件を解析しないので、`x if x > 0` と `x if x <= 0` だけでは網羅とみなされず `_` などが要る。
+
+- id: rust.match-guard
+  kind: code
+  subject: rust
+  title: match の腕は上から順に試される
+  requires: [rust.patterns]
+  source: TRPL Ch.19.3
+  lang: rust
+  code: |
+    fn classify(n: i32) -> &'static str {
+        match n {
+            i32::MIN..=-1 => "neg",
+            0 => "zero",
+            x if x % 2 == 0 => "even",
+            1..=9 => "small-odd",
+            _ => "big-odd",
+        }
+    }
+
+    fn main() {
+        for n in [-5, 0, 4, 7, 15, 12] {
+            print!("{} ", classify(n));
+        }
+        println!();
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "neg zero even small-odd big-odd even "
+      - "neg zero small-odd small-odd big-odd big-odd "
+      - "neg zero even small-odd big-odd big-odd "
+      - コンパイルエラー（範囲が重なっている）
+    value: 0
+  explanation: |-
+    腕は上から順に試され、最初に一致したものが選ばれる。$4$ と $12$ は偶数のガードに当たる。$7$ は奇数なのでガードが偽になり `1..=9` に、$15$ は `_` に落ちる。
+  verify:
+    stdout: "neg zero even small-odd big-odd even \n"
+
+- id: rust.derive
+  kind: definition
+  subject: rust
+  title: derive と Copy / Clone
+  requires: [rust.struct]
+  source: TRPL Appendix C
+  statement: |-
+    `#[derive(...)]` で標準トレイトの実装を自動生成できる。
+    - `Debug`（`{:?}` で表示）、`Clone`（`.clone()` で明示的に複製）、`Copy`（代入でビットコピーされ、ムーブにならない）
+    - `PartialEq`/`Eq`（`==`）、`PartialOrd`/`Ord`（`<` やソート）、`Hash`（`HashMap` のキー）、`Default`
+    `Copy` はすべてのフィールドが `Copy` のときだけ付けられる（`String` や `Vec` を含む型は不可）。
+  questions:
+    - q: |-
+        `f64` が `Eq` や `Ord` を実装していないのはなぜか？
+      a: |-
+        `NaN != NaN` なので反射律（$a = a$）が成り立たず、全順序にもならない（`NaN` は何とも比較できない）。並べ替えには `sort_by(|a, b| a.total_cmp(b))` を使う。

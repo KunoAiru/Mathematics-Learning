@@ -110,7 +110,18 @@ for (const it of items) {
 const has = (cmd: string) => spawnSync('which', [cmd]).status === 0;
 
 /** 演習: starter 中の同名関数を solution で置き換えた完全なプログラム */
+export const BEGIN_MARK = '// ---- 解答欄 ----';
+export const END_MARK = '// ---- ここまで ----';
+
+/**
+ * 演習: starter の「解答欄」マーカーの間（なければ同名の関数）を solution で置き換えた完全なプログラム。
+ * クラスや複数の関数を書かせる演習はマーカー方式にする。
+ */
 export function spliceSolution(starter: string, solution: string): string {
+  const lines0 = starter.split('\n');
+  const b = lines0.findIndex((l) => l.trim() === BEGIN_MARK);
+  const e = lines0.findIndex((l) => l.trim() === END_MARK);
+  if (b >= 0 && e > b) return [...lines0.slice(0, b), solution.trimEnd(), ...lines0.slice(e + 1)].join('\n');
   const sig = solution.split('\n').find((l) => /\w+\s*\(/.test(l) && /\{\s*$/.test(l));
   if (!sig) throw new Error('solution に関数定義が見つかりません');
   const name = sig.match(/(\w+)\s*\(/)![1];
@@ -127,7 +138,7 @@ function runCode(lang: 'cpp' | 'rust', src: string): { build: boolean; stdout: s
   const file = join(dir, lang === 'cpp' ? 'main.cpp' : 'main.rs');
   const bin = join(dir, 'main');
   writeFileSync(file, src);
-  const args = lang === 'cpp' ? ['-std=c++20', '-O0', '-o', bin, file] : ['--edition', '2021', '-o', bin, file];
+  const args = lang === 'cpp' ? ['-std=c++20', '-pedantic-errors', '-O0', '-pthread', '-o', bin, file] : ['--edition', '2021', '-o', bin, file];
   const b = spawnSync(lang === 'cpp' ? 'g++' : 'rustc', args, { encoding: 'utf8' });
   if (b.status !== 0) return { build: false, stdout: '', status: null, stderr: b.stderr };
   const r = spawnSync(bin, { encoding: 'utf8', timeout: 10000 });

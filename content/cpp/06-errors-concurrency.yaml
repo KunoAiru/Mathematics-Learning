@@ -1,0 +1,265 @@
+# C++ 6: 例外処理と並行処理
+# 出典: cppreference.com, learncpp.com
+
+- id: cpp.exceptions
+  kind: definition
+  subject: cpp
+  title: 例外と例外安全性
+  requires: [cpp.raii, cpp.inheritance]
+  source: learncpp.com Ch.27, cppreference.com "Exceptions"
+  statement: |-
+    ```
+    try {
+        risky();
+    } catch (const std::out_of_range& e) {   // 派生クラスから先に、const 参照で受ける
+        std::cerr << e.what() << '\n';
+    } catch (const std::exception& e) {
+        ...
+    }
+    ```
+    例外が投げられると、`catch` に届くまでの間にあるローカルオブジェクトのデストラクタが順に呼ばれる（**スタックの巻き戻し**）。だから RAII なら例外でもリークしない。
+    関数が保証する性質: **基本保証**（リークせず不変条件を保つ）、**強い保証**（失敗したら呼ぶ前の状態に戻る）、**例外を投げない保証**（`noexcept`）。
+  questions:
+    - q: |-
+        デストラクタから例外を投げてはいけない理由は？
+      a: |-
+        巻き戻し中（すでに例外が飛んでいる間）にデストラクタがさらに例外を投げると `std::terminate` で強制終了する。そのためデストラクタは既定で `noexcept`。
+    - q: |-
+        例外を値（`catch (std::exception e)`）で受けると何が起きるか？
+      a: |-
+        スライシングが起きて派生クラスの情報が失われ、`what()` が基底クラスのものになりうる。コピーのコストもかかる。`const&` で受ける。
+
+- id: cpp.unwinding
+  kind: code
+  subject: cpp
+  title: スタックの巻き戻し
+  requires: [cpp.exceptions]
+  source: cppreference.com "throw expression"
+  lang: cpp
+  code: |
+    #include <iostream>
+    #include <stdexcept>
+
+    struct Guard {
+        char c;
+        ~Guard() { std::cout << c; }
+    };
+
+    void f() {
+        Guard a{'a'};
+        Guard b{'b'};
+        throw std::runtime_error("!");
+        Guard c{'c'};
+    }
+
+    int main() {
+        try {
+            f();
+        } catch (const std::exception& e) {
+            std::cout << e.what();
+        }
+        std::cout << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "!"
+      - "ab!"
+      - "ba!"
+      - "bac!"
+    value: 2
+  explanation: |-
+    例外が `f` を抜ける前に、作られたローカル変数が逆順（`b` → `a`）に破棄される。`c` はまだ作られていないので破棄もされない。その後 `catch` に入って `!`。
+  verify:
+    stdout: "ba!\n"
+
+- id: cpp.threads
+  kind: definition
+  subject: cpp
+  title: std::thread と std::jthread
+  requires: [cpp.lambda, cpp.raii]
+  source: cppreference.com "std::thread", "std::jthread"
+  statement: |-
+    ```
+    std::thread t([] { work(); });   // 新しいスレッドで実行開始
+    t.join();                         // 終わるまで待つ
+    ```
+    - `std::thread` は破棄される前に `join()` か `detach()` しなければならない。どちらもしないと `std::terminate` でプログラムが落ちる
+    - `std::jthread`（C++20）はデストラクタで自動的に `join` する RAII 版。停止要求（`std::stop_token`）も扱える
+    - 結果が欲しいだけなら `std::async` と `std::future` が手軽
+  questions:
+    - q: |-
+        スレッドに渡すラムダで、ローカル変数を参照キャプチャするときの注意点は？
+      a: |-
+        スレッドが終わる前にその変数のスコープを抜けるとダングリングになる。`join` してから抜けるか、値でキャプチャする。
+
+- id: cpp.thread-join
+  kind: code
+  subject: cpp
+  title: join し忘れたスレッド
+  requires: [cpp.threads]
+  source: cppreference.com "std::thread::~thread"
+  lang: cpp
+  code: |
+    #include <iostream>
+    #include <thread>
+
+    int main() {
+        std::thread t([] { std::cout << "work\n"; });
+        std::cout << "main\n";
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "main と work が順不同で出力され、正常終了する"
+      - "std::terminate が呼ばれて異常終了する"
+      - コンパイルエラー
+    value: 1
+  explanation: |-
+    `t` は `main` の終わりで破棄されるが、まだ `joinable()`（join も detach もしていない）なのでデストラクタが `std::terminate` を呼ぶ。
+    `t.join();` を書くか、`std::jthread` を使う。
+  verify:
+    build: ok
+    panics: true
+
+- id: cpp.data-race
+  kind: definition
+  subject: cpp
+  title: データ競合と排他制御
+  requires: [cpp.threads, cpp.ub]
+  source: cppreference.com "Memory model", "std::mutex"
+  why: |-
+    再現しにくく、テストをすり抜け、本番でだけ起きるバグの代表。TOCTOU（検査と使用の間の競合）は権限昇格の脆弱性にもなる。
+  statement: |-
+    複数のスレッドが同じメモリに同期なしでアクセスし、少なくとも1つが書き込みなら**データ競合**で、未定義動作。
+    - `std::mutex` と `std::lock_guard` / `std::scoped_lock` で、同時に1スレッドだけが触れる区間（クリティカルセクション）を作る
+    - 単純なカウンタやフラグなら `std::atomic<int>` などのアトミック型
+    - 複数のロックを取るときは**常に同じ順番**で取る（そうしないとデッドロック）。`std::scoped_lock(m1, m2)` はまとめて安全に取る
+  questions:
+    - q: |-
+        データ競合を検出するツールは？
+      a: |-
+        ThreadSanitizer（`-fsanitize=thread`）。実行中のメモリアクセスを記録して、同期なしの競合アクセスを報告する。
+
+- id: cpp.race-counter
+  kind: code
+  subject: cpp
+  title: 同期なしのカウンタ
+  requires: [cpp.data-race]
+  source: cppreference.com "Memory model"
+  lang: cpp
+  code: |
+    #include <iostream>
+    #include <thread>
+
+    int main() {
+        int counter = 0;
+        auto work = [&] { for (int i = 0; i < 100000; ++i) ++counter; };
+        std::thread t1(work), t2(work);
+        t1.join();
+        t2.join();
+        std::cout << counter << '\n';
+    }
+  prompt: |-
+    このプログラムについて正しい説明はどれか？
+  answer:
+    type: choice
+    choices:
+      - "必ず 200000 と出力される"
+      - "データ競合で未定義動作。実際には 200000 より小さい値がよく出る"
+      - コンパイルエラー
+    value: 1
+  explanation: |-
+    `++counter` は「読む → 足す → 書く」の3段階で、2つのスレッドが同じ値を読んで同じ値を書くと1回分が失われる。規格上はデータ競合なので未定義動作。
+    `std::atomic<int> counter = 0;` にするか、`std::mutex` で守る。各スレッドで局所的に数えて最後に足すのが一番速い。
+
+- id: cpp.atomic-counter
+  kind: code
+  subject: cpp
+  title: アトミック変数のカウンタ
+  requires: [cpp.race-counter]
+  source: cppreference.com "std::atomic"
+  lang: cpp
+  code: |
+    #include <atomic>
+    #include <iostream>
+    #include <thread>
+
+    int main() {
+        std::atomic<int> counter = 0;
+        auto work = [&] { for (int i = 0; i < 100000; ++i) ++counter; };
+        std::thread t1(work), t2(work);
+        t1.join();
+        t2.join();
+        std::cout << counter << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "200000"
+      - "100000 から 200000 の間の不定な値"
+      - "100000"
+    value: 0
+  explanation: |-
+    `std::atomic<int>` の `++` は「読む・足す・書く」を分割できない1つの操作として行うので、更新が失われず必ず $200000$。
+    ただしアトミック操作はキャッシュラインの奪い合いで遅くなりうる。大量に更新するなら、スレッドごとに数えて最後に合計する。
+  verify:
+    stdout: "200000\n"
+
+- id: cpp.parallel-sum
+  kind: exercise
+  subject: cpp
+  title: スレッドで並列に合計を計算する
+  requires: [cpp.data-race, cpp.algorithms]
+  source: 並行処理の総合演習
+  lang: cpp
+  prompt: |-
+    `std::vector<long long>` の総和を、`n_threads` 個のスレッドに区間を分けて並列に計算する関数を書け。データ競合を起こさないこと（各スレッドは自分の結果を別々の場所に書く）。
+  starter: |
+    #include <cassert>
+    #include <iostream>
+    #include <numeric>
+    #include <thread>
+    #include <vector>
+
+    long long parallel_sum(const std::vector<long long>& v, unsigned n_threads) {
+        // TODO: 区間 [begin, end) を n_threads 個に分け、std::thread で部分和を計算して合計する
+        return 0;
+    }
+
+    int main() {
+        std::vector<long long> v(1'000'003);
+        std::iota(v.begin(), v.end(), 1);
+        long long expect = 1'000'003LL * 1'000'004LL / 2;
+        for (unsigned t : {1u, 2u, 3u, 8u}) assert(parallel_sum(v, t) == expect);
+        assert(parallel_sum({}, 4) == 0);
+        assert(parallel_sum({5}, 4) == 5);
+        std::cout << "all tests passed\n";
+    }
+  solution: |
+    long long parallel_sum(const std::vector<long long>& v, unsigned n_threads) {
+        if (n_threads == 0) n_threads = 1;
+        std::vector<long long> partial(n_threads, 0);
+        std::vector<std::thread> threads;
+        const std::size_t n = v.size();
+        for (unsigned t = 0; t < n_threads; ++t) {
+            std::size_t begin = n * t / n_threads;
+            std::size_t end = n * (t + 1) / n_threads;
+            threads.emplace_back([&v, &partial, t, begin, end] {
+                partial[t] = std::accumulate(v.begin() + begin, v.begin() + end, 0LL);
+            });
+        }
+        for (auto& th : threads) th.join();
+        return std::accumulate(partial.begin(), partial.end(), 0LL);
+    }
+  checklist:
+    - すべての assert が通った
+    - "`-fsanitize=thread` を付けて実行しても警告が出ない"
+    - "要素数がスレッド数で割り切れないときも、区間 `n*t/T` の分け方で取りこぼしがない理由を説明できる"
+    - 隣り合う `partial[t]` に書き込むと遅くなりうる理由（偽共有）を説明できる

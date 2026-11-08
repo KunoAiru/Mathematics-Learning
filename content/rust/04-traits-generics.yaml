@@ -1,0 +1,249 @@
+# Rust 4: トレイトとジェネリクス
+# 出典: TRPL（無料公開）
+
+- id: rust.trait
+  kind: definition
+  subject: rust
+  title: トレイト
+  requires: [rust.struct]
+  source: TRPL Ch.10.2
+  why: |-
+    「この型はこの操作ができる」という約束を表す。C++ のコンセプトと仮想関数の両方の役割を持ち、Rust のライブラリ設計の中心。
+  statement: |-
+    ```
+    trait Shape {
+        fn area(&self) -> f64;                                   // 必須メソッド
+        fn describe(&self) -> String { format!("area={}", self.area()) } // 既定の実装
+    }
+    struct Square(f64);
+    impl Shape for Square {
+        fn area(&self) -> f64 { self.0 * self.0 }
+    }
+    ```
+    **孤児ルール**: トレイトか型の少なくとも一方が自分のクレートで定義されていなければ `impl` できない（`impl Display for Vec<i32>` は不可）。他のクレートと実装が衝突しないための規則。
+  questions:
+    - q: |-
+        孤児ルールを回避して外部の型に外部のトレイトを実装したいときの方法は？
+      a: |-
+        newtype パターン: `struct Wrapper(Vec<i32>);` を自分のクレートで定義し、それに実装する。
+
+- id: rust.generics
+  kind: definition
+  subject: rust
+  title: ジェネリクスとトレイト境界
+  requires: [rust.trait]
+  source: TRPL Ch.10.1–10.2
+  statement: |-
+    ```
+    fn largest<T: PartialOrd>(xs: &[T]) -> &T {
+        let mut m = &xs[0];
+        for x in xs { if x > m { m = x; } }
+        m
+    }
+    fn print_all<T>(xs: &[T]) where T: std::fmt::Display { ... }
+    fn total(shapes: &[impl Shape]) -> f64 { ... }   // 引数位置の impl Trait
+    ```
+    型引数に**トレイト境界**を付けると、その型に要求する操作が明示される。境界にない操作は使えない（C++ のテンプレートと違い、本体は定義時に検査される）。
+    ジェネリック関数は型ごとに実体化される（単相化）ので、実行時コストはない。
+  questions:
+    - q: |-
+        C++ のテンプレートと比べて、トレイト境界の利点は？
+      a: |-
+        関数本体が定義の時点で境界だけを使って型検査されるので、エラーが呼び出し側の深い所ではなく定義か呼び出しの位置で分かりやすく出る。必要な性質がシグネチャに書かれる。
+
+- id: rust.generic-bound
+  kind: code
+  subject: rust
+  title: トレイト境界の付け忘れ
+  requires: [rust.generics]
+  source: TRPL Ch.10.1
+  lang: rust
+  code: |
+    fn largest<T>(xs: &[T]) -> &T {
+        let mut m = &xs[0];
+        for x in xs {
+            if x > m {
+                m = x;
+            }
+        }
+        m
+    }
+
+    fn main() {
+        println!("{}", largest(&[3, 7, 2]));
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "7 と出力される"
+      - コンパイルエラー（T に比較の境界がない）
+      - "実際に呼ばれるのは i32 なので問題なく動く"
+    value: 1
+  explanation: |-
+    `T` には何の境界もないので、`>` が使えるかどうか分からずエラー E0369。実際に `i32` で呼んでいても関係ない（C++ のテンプレートなら通るところ）。`fn largest<T: PartialOrd>` とすれば通る。
+  verify:
+    build: error
+
+- id: rust.trait-object
+  kind: definition
+  subject: rust
+  title: トレイトオブジェクト（dyn Trait）
+  requires: [rust.generics]
+  source: TRPL Ch.17.2
+  statement: |-
+    異なる型を同じコレクションに入れて同じように扱いたいときは、トレイトオブジェクトを使う。
+    ```
+    let shapes: Vec<Box<dyn Shape>> = vec![Box::new(Square(2.0)), Box::new(Circle(1.0))];
+    for s in &shapes { println!("{}", s.area()); }   // 実行時に vtable 経由で呼ばれる
+    ```
+    - ジェネリクス（`impl Trait` / `T: Trait`）は**静的ディスパッチ**: 速いが型ごとにコードが増える
+    - `dyn Trait` は**動的ディスパッチ**: 間接呼び出しのコストがあるが、異なる型を混ぜられる
+  questions:
+    - q: |-
+        C++ で `Box<dyn Shape>` に相当するものは？
+      a: |-
+        仮想関数を持つ基底クラスへの `std::unique_ptr<Shape>`。Rust では継承なしでトレイトを実装したどの型でも入れられる。
+
+- id: rust.dyn-code
+  kind: code
+  subject: rust
+  title: 既定メソッドと動的ディスパッチ
+  requires: [rust.trait-object]
+  source: TRPL Ch.17.2
+  lang: rust
+  code: |
+    trait Shape {
+        fn area(&self) -> f64;
+        fn name(&self) -> String {
+            String::from("shape")
+        }
+    }
+
+    struct Sq(f64);
+    struct Ci(f64);
+
+    impl Shape for Sq {
+        fn area(&self) -> f64 { self.0 * self.0 }
+        fn name(&self) -> String { "square".to_string() }
+    }
+    impl Shape for Ci {
+        fn area(&self) -> f64 { 3.0 * self.0 * self.0 }
+    }
+
+    fn main() {
+        let v: Vec<Box<dyn Shape>> = vec![Box::new(Sq(2.0)), Box::new(Ci(1.0))];
+        for s in &v {
+            print!("{}={} ", s.name(), s.area());
+        }
+        println!();
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "square=4 shape=3 "
+      - "shape=4 shape=3 "
+      - "square=4 circle=3 "
+      - "square=4.0 shape=3.0 "
+    value: 0
+  explanation: |-
+    `Sq` は `name` を上書きしているので `square`、`Ci` は既定の実装の `shape`。`f64` の `4.0` は `{}` で `4` と表示される（`{:?}` なら `4.0`）。
+  verify:
+    stdout: "square=4 shape=3 \n"
+
+- id: rust.std-traits
+  kind: definition
+  subject: rust
+  title: 標準ライブラリの主なトレイト
+  requires: [rust.trait, rust.derive]
+  source: std ドキュメント
+  statement: |-
+    - `Display`（`{}` で表示。自分で実装する）と `Debug`（`{:?}`。derive できる）
+    - `From<T>` / `Into<T>`: 型変換。`From` を実装すれば `Into` は自動でついてくる。`?` でのエラー変換にも使われる
+    - `Iterator`: `next()` を実装すれば `map` や `filter` などが全部使える
+    - `Add`, `Mul` など（`std::ops`）: 演算子オーバーロード
+    - `Deref`: `*` と自動参照外し（`Box` や `String` → `&str`）
+    - `Drop`: スコープを抜けるときの後片付け（RAII）
+    ```
+    impl std::fmt::Display for Point {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "({}, {})", self.x, self.y)
+        }
+    }
+    ```
+  questions:
+    - q: |-
+        `Display` を実装すると自動で使えるようになるメソッドは？
+      a: |-
+        `to_string()`（`ToString` トレイトが `Display` を実装したすべての型に自動実装される）。
+
+- id: rust.operator-add
+  kind: code
+  subject: rust
+  title: 演算子オーバーロードと Copy
+  requires: [rust.std-traits]
+  source: std ドキュメント "std::ops::Add"
+  lang: rust
+  code: |
+    use std::ops::Add;
+
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    struct V(i32, i32);
+
+    impl Add for V {
+        type Output = V;
+        fn add(self, o: V) -> V {
+            V(self.0 + o.0, self.1 + o.1)
+        }
+    }
+
+    fn main() {
+        let a = V(1, 2);
+        let b = a + V(10, 20);
+        println!("{:?} {:?}", a, b);
+    }
+  prompt: |-
+    出力は何か？（また、`Copy` を derive から外すとどうなるか考えよ）
+  answer:
+    type: choice
+    choices:
+      - "V(1, 2) V(11, 22)"
+      - "V(11, 22) V(11, 22)"
+      - コンパイルエラー（a はムーブ済み）
+    value: 0
+  explanation: |-
+    `add(self, ...)` は値を受け取るので、`a + ...` で `a` は本来ムーブされる。しかし `V` は `Copy` なのでコピーが渡され、`a` はそのまま使える。
+    `Copy` を外すと `a` がムーブされ、`println!` で `a` を使うところがエラー E0382 になる。大きな型なら `impl Add<&V> for &V` のように参照で実装する。
+  verify:
+    stdout: "V(1, 2) V(11, 22)\n"
+
+- id: rust.ord-f64
+  kind: code
+  subject: rust
+  title: f64 の並べ替え
+  requires: [rust.derive, rust.vec]
+  source: std ドキュメント "f64::total_cmp"
+  lang: rust
+  code: |
+    fn main() {
+        let mut v = vec![2.5, -1.0, 0.5];
+        v.sort();
+        println!("{:?}", v);
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "[-1.0, 0.5, 2.5] と出力される"
+      - コンパイルエラー（f64 は Ord を実装していない）
+      - 実行時にパニックする
+    value: 1
+  explanation: |-
+    `sort` は `T: Ord` を要求するが、`f64` は NaN があるため `PartialOrd` しか実装していない（E0277）。
+    `v.sort_by(|a, b| a.total_cmp(b));` を使う（NaN も含めた全順序）。C++ では NaN を含む配列を `<` で `std::sort` すると比較関数の前提が崩れて未定義動作になりうるが、Rust では型でそれを防いでいる。
+  verify:
+    build: error

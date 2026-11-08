@@ -1,0 +1,319 @@
+# C++ 4: メモリ管理（スマートポインタ・ムーブ）
+# 出典: cppreference.com, learncpp.com
+
+- id: cpp.stack-heap
+  kind: definition
+  subject: cpp
+  title: 記憶域期間（スタックとヒープ）
+  requires: [cpp.lifetime]
+  source: learncpp.com Ch.7, Ch.19
+  statement: |-
+    - **自動記憶域**（いわゆるスタック）: ローカル変数。スコープを抜けると自動で破棄される。確保が速い
+    - **動的記憶域**（ヒープ）: `new` で確保し `delete` で解放するまで生きる。大きさを実行時に決められる
+    - **静的記憶域**: グローバル変数や `static` 変数。プログラムの終わりまで生きる
+
+    現代の C++ では `new` / `delete` を直接書かず、`std::vector` や `std::make_unique` に任せる。手書きすると、解放忘れ（リーク）・二重解放・`new[]` を `delete` で解放するミスなどが起きる。
+  questions:
+    - q: |-
+        `int* p = new int[10]; delete p;` の問題は？
+      a: |-
+        配列は `delete[]` で解放しなければならず、`delete` との取り違えは未定義動作。そもそも `std::vector<int>` か `std::make_unique<int[]>(10)` を使えば起きない。
+    - q: |-
+        大きな配列（例: 100 MB）をローカル変数 `double a[N];` として確保すると何が起きうるか？
+      a: |-
+        スタックの大きさ（Linux の既定は 8 MB 程度）を超えてスタックオーバーフローし、セグメンテーション違反で落ちる。大きなデータは `std::vector` でヒープに置く。
+
+- id: cpp.unique-ptr
+  kind: definition
+  subject: cpp
+  title: std::unique_ptr
+  requires: [cpp.stack-heap, cpp.raii]
+  source: cppreference.com "std::unique_ptr"
+  statement: |-
+    ヒープ上のオブジェクトを**ただ1つの所有者**として管理し、破棄時に自動で `delete` するスマートポインタ。
+    ```
+    auto p = std::make_unique<Widget>(args...);   // 生成
+    p->method();
+    std::unique_ptr<Widget> q = std::move(p);     // 所有権を移す（p は空になる）
+    ```
+    コピーはできず（コンパイルエラー）、ムーブだけできる。オーバーヘッドは生のポインタとほぼ同じ。所有しないで使うだけの関数には `Widget&` や `Widget*` を渡す。
+  questions:
+    - q: |-
+        関数の引数を `std::unique_ptr<Widget>` 型（値渡し）にすることは何を意味するか？
+      a: |-
+        「この関数が所有権を受け取る」。呼び出し側は `std::move` で渡す必要があり、呼んだあとは使えないことがコードから読み取れる。
+
+- id: cpp.unique-copy
+  kind: code
+  subject: cpp
+  title: unique_ptr のコピー
+  requires: [cpp.unique-ptr]
+  source: cppreference.com "std::unique_ptr"
+  lang: cpp
+  code: |
+    #include <iostream>
+    #include <memory>
+
+    int main() {
+        auto p = std::make_unique<int>(42);
+        auto q = p;
+        std::cout << *q << '\n';
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "42 と出力される"
+      - コンパイルエラー（コピーコンストラクタが削除されている）
+      - 実行時に二重解放で落ちる
+    value: 1
+  explanation: |-
+    `unique_ptr` のコピーコンストラクタは `= delete` されているのでコンパイルエラー。所有者が2人になる状況を型で禁止している。所有権を移すなら `auto q = std::move(p);`（以後 `p` は `nullptr`）。
+  verify:
+    build: error
+
+- id: cpp.shared-ptr
+  kind: definition
+  subject: cpp
+  title: std::shared_ptr と std::weak_ptr
+  requires: [cpp.unique-ptr]
+  source: cppreference.com "std::shared_ptr", "std::weak_ptr"
+  statement: |-
+    - `std::shared_ptr<T>` は**参照カウント**で所有権を共有する。最後の `shared_ptr` が破棄されたときにオブジェクトが解放される。`std::make_shared` で作る
+    - カウントの増減はスレッド安全（アトミック）なので、コピーには多少コストがある
+    - `std::weak_ptr<T>` は所有せずに観察するだけ。`lock()` で一時的に `shared_ptr` を得る（もう解放されていれば空）
+    - 互いに `shared_ptr` で指し合う**循環参照**はカウントが 0 にならずリークする。片方を `weak_ptr` にして断ち切る
+  questions:
+    - q: |-
+        `unique_ptr` と `shared_ptr` のどちらを既定で選ぶべきか？
+      a: |-
+        `unique_ptr`。所有者が1人なら設計が単純で速い。本当に共有が必要になったときだけ `shared_ptr` にする（`unique_ptr` から `shared_ptr` へは変換できる）。
+
+- id: cpp.shared-count
+  kind: code
+  subject: cpp
+  title: 参照カウントの変化
+  requires: [cpp.shared-ptr]
+  source: cppreference.com "std::shared_ptr::use_count"
+  lang: cpp
+  code: |
+    #include <iostream>
+    #include <memory>
+
+    int main() {
+        auto a = std::make_shared<int>(42);
+        std::cout << a.use_count();
+        {
+            auto b = a;
+            std::cout << a.use_count();
+        }
+        std::weak_ptr<int> w = a;
+        std::cout << a.use_count() << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "121"
+      - "122"
+      - "123"
+      - "111"
+    value: 0
+  explanation: |-
+    最初は $1$。`b` にコピーすると $2$、ブロックを抜けて `b` が破棄されると $1$ に戻る。`weak_ptr` は所有しないので強参照のカウントは増えない（$1$）。
+  verify:
+    stdout: "121\n"
+
+- id: cpp.shared-cycle
+  kind: code
+  subject: cpp
+  title: shared_ptr の循環参照
+  requires: [cpp.shared-ptr]
+  source: cppreference.com "std::weak_ptr"
+  lang: cpp
+  code: |
+    #include <iostream>
+    #include <memory>
+
+    struct Node {
+        std::shared_ptr<Node> next;
+        ~Node() { std::cout << "~"; }
+    };
+
+    int main() {
+        {
+            auto a = std::make_shared<Node>();
+            auto b = std::make_shared<Node>();
+            a->next = b;
+            b->next = a;
+        }
+        std::cout << "end\n";
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "~~end"
+      - "end"
+      - "~end"
+      - 二重解放で落ちる
+    value: 1
+  explanation: |-
+    ブロックを抜けても、`a` の指す先は `b->next` が、`b` の指す先は `a->next` が所有しているのでカウントは $1$ のまま。どちらも解放されずデストラクタは呼ばれない（メモリリーク）。
+    `next` の片方（たとえば親への逆向きの参照）を `std::weak_ptr<Node>` にすると解決する。木構造の親ポインタ、オブザーバーパターンでよく出る。
+  verify:
+    stdout: "end\n"
+
+- id: cpp.move-semantics
+  kind: definition
+  subject: cpp
+  title: ムーブセマンティクスと右辺値参照
+  requires: [cpp.rule-of-five, cpp.unique-ptr]
+  source: cppreference.com "Move constructors", "std::move"
+  why: |-
+    大きなバッファを持つオブジェクトをコピーせずに受け渡せる。性能と、所有権の受け渡しをコードで表現する手段の両方になる。
+  statement: |-
+    - 式には「名前があって後でまた使える」**左辺値**と、「一時的でこの後使われない」**右辺値**がある
+    - `T&&`（右辺値参照）は右辺値に結びつく。ムーブコンストラクタ `T(T&& other)` は `other` の中身（ポインタなど）を**奪って**、`other` を空にする
+    - `std::move(x)` は何も動かさない。`x` を右辺値として扱う**キャスト**にすぎない
+    - ムーブされた後のオブジェクトは「有効だが未規定の状態」。代入し直すか破棄するだけにする
+    - ムーブコンストラクタは `noexcept` にする（そうしないと `std::vector` の再確保時にコピーが使われる）
+  questions:
+    - q: |-
+        `return local;`（ローカル変数を返す）で `return std::move(local);` と書くべきでない理由は？
+      a: |-
+        `return local;` なら名前付き戻り値最適化（NRVO）でコピーもムーブも省略されうる。`std::move` を付けるとそれが妨げられ、かえってムーブが1回増える。ローカル変数は返すときに自動で右辺値扱いになる。
+
+- id: cpp.move-string
+  kind: code
+  subject: cpp
+  title: ムーブ後のオブジェクト
+  requires: [cpp.move-semantics]
+  source: cppreference.com "std::basic_string::basic_string"
+  lang: cpp
+  code: |
+    #include <iostream>
+    #include <string>
+    #include <utility>
+
+    int main() {
+        std::string a = "a long string that does not fit in SSO";
+        std::string b = std::move(a);
+        std::cout << b.size() << '\n';
+        // a.size() はいくつ？ a を使ってよいか？
+    }
+  prompt: |-
+    ムーブした後の `a` について正しい説明はどれか？
+  answer:
+    type: choice
+    choices:
+      - "a はもう破棄されているので触れると未定義動作"
+      - "a は有効だが中身は未規定。size() や代入は安全だが、中身を当てにしてはいけない"
+      - "a は必ず空文字列になると規格で保証されている"
+      - "a は元の文字列を保ったまま"
+    value: 1
+  explanation: |-
+    標準ライブラリの型は、ムーブされた後も「有効だが未規定の状態」になる。デストラクタ・代入・`size()` などの前提条件のない操作は安全だが、値は規格で決まっていない（libstdc++ では実際には空になる）。
+    ムーブ後は `a = "new";` で値を入れ直すか、使わないようにする。clang-tidy の `bugprone-use-after-move` で検出できる。
+
+- id: cpp.leak-exception
+  kind: code
+  subject: cpp
+  title: 例外とメモリリーク
+  requires: [cpp.unique-ptr]
+  source: learncpp.com Ch.27
+  lang: cpp
+  code: |
+    void process(int n) {
+        int* buf = new int[n];
+        if (n > 100) {
+            throw std::runtime_error("too large");
+        }
+        use(buf);
+        delete[] buf;
+    }
+  prompt: |-
+    このコードの問題点と直し方を述べよ。
+  answer:
+    type: self
+    value: |-
+      `n > 100` で例外を投げると `delete[] buf` に到達せずメモリリークする。`use` の中で例外が起きた場合も同じ。`auto buf = std::make_unique<int[]>(n);` か `std::vector<int> buf(n);` にすれば、どの経路で抜けても自動で解放される。
+  explanation: |-
+    「途中で抜ける経路」は return、例外、break など多い。解放処理を手書きすると、どれか1つで漏れる。RAII に任せるのが唯一の確実な方法。
+    リークは Valgrind（`valgrind --leak-check=full`）や AddressSanitizer の LeakSanitizer で見つかる。
+
+- id: cpp.raii-buffer
+  kind: exercise
+  subject: cpp
+  title: 5 の規則でバッファクラスを実装する
+  requires: [cpp.move-semantics]
+  source: リソース管理クラスの総合演習
+  lang: cpp
+  prompt: |-
+    生のポインタ `new[]` でメモリを持つ `Buffer` クラスを、**コピー（深いコピー）とムーブの両方**が正しく動くように実装せよ（5 の規則）。
+    実務では `std::vector` を使うべきだが、中で何が起きているかを理解するための演習。
+  starter: |
+    #include <algorithm>
+    #include <cassert>
+    #include <cstddef>
+    #include <iostream>
+    #include <utility>
+
+    // ---- 解答欄 ----
+    class Buffer {
+    public:
+        explicit Buffer(std::size_t n);
+        // TODO: デストラクタ、コピー/ムーブのコンストラクタと代入、size(), operator[]
+    };
+    // ---- ここまで ----
+
+    int main() {
+        Buffer a(3);
+        a[0] = 1; a[1] = 2; a[2] = 3;
+        Buffer b = a;                 // 深いコピー
+        b[0] = 100;
+        assert(a[0] == 1 && b[0] == 100);
+        Buffer c = std::move(a);      // ムーブ
+        assert(c.size() == 3 && c[2] == 3 && a.size() == 0);
+        a = c;                        // コピー代入
+        assert(a.size() == 3 && a[1] == 2);
+        a = a;                        // 自己代入
+        assert(a[1] == 2);
+        b = std::move(c);             // ムーブ代入
+        assert(b.size() == 3 && b[0] == 1 && c.size() == 0);
+        std::cout << "all tests passed\n";
+    }
+  solution: |
+    class Buffer {
+    public:
+        explicit Buffer(std::size_t n) : size_{n}, data_{n ? new int[n]{} : nullptr} {}
+        ~Buffer() { delete[] data_; }
+
+        Buffer(const Buffer& o) : size_{o.size_}, data_{o.size_ ? new int[o.size_] : nullptr} {
+            std::copy(o.data_, o.data_ + o.size_, data_);
+        }
+        Buffer(Buffer&& o) noexcept : size_{std::exchange(o.size_, 0)}, data_{std::exchange(o.data_, nullptr)} {}
+
+        // コピー・アンド・スワップ: 引数を値で受けるので、コピー代入とムーブ代入を1つで書け、自己代入にも強い
+        Buffer& operator=(Buffer o) noexcept {
+            std::swap(size_, o.size_);
+            std::swap(data_, o.data_);
+            return *this;
+        }
+
+        std::size_t size() const { return size_; }
+        int& operator[](std::size_t i) { return data_[i]; }
+        int operator[](std::size_t i) const { return data_[i]; }
+
+    private:
+        std::size_t size_;
+        int* data_;
+    };
+  checklist:
+    - すべての assert が通った
+    - AddressSanitizer（`-fsanitize=address`）を付けても何も報告されない
+    - ムーブコンストラクタに `noexcept` を付ける理由を説明できる
+    - コピー・アンド・スワップが自己代入に強い理由を説明できる

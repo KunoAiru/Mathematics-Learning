@@ -118,6 +118,7 @@ describe('途中でやめたとき', () => {
   });
   it('確認カードの途中でやめると、答えていないカードだけが残る', () => {
     const s = defaultState();
+    s.settings.newPerDay = 1;
     const first = buildDailySet(s, morning);
     const learn = first.find((x) => x.kind === 'learn')!;
     if (learn.kind !== 'learn') throw new Error();
@@ -150,6 +151,14 @@ describe('デイリーセット', () => {
     const c = nextConcept(s)!;
     expect(c.requires).toEqual([]);
     expect(set.some((x) => x.kind === 'card' && x.label === '今日の1問')).toBe(true);
+  });
+  it('1日に複数の概念を学ぶ設定では、別々の科目から選ぶ', () => {
+    const s = defaultState();
+    s.settings.newPerDay = 3;
+    const learns = buildDailySet(s, new Date(2026, 10, 8)).filter((x) => x.kind === 'learn');
+    expect(learns.length).toBe(3);
+    const subjects = learns.map((x) => (x.kind === 'learn' ? ITEMS.find((i) => i.id === x.itemId)!.subject : ''));
+    expect(new Set(subjects).size).toBe(3);
   });
   it('線形代数から始まる', () => {
     expect(nextConcept(defaultState())!.id).toBe('la.vector-space');

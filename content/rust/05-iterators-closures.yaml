@@ -1,0 +1,202 @@
+# Rust 5: クロージャとイテレータ
+# 出典: TRPL Ch.13（無料公開）
+
+- id: rust.closures
+  kind: definition
+  subject: rust
+  title: クロージャ
+  requires: [rust.borrow, rust.functions]
+  source: TRPL Ch.13.1
+  statement: |-
+    ```
+    let k = 3;
+    let add_k = |x: i32| x + k;        // k を不変借用
+    let mut n = 0;
+    let mut inc = || n += 1;            // n を可変借用（クロージャ自体も mut が必要）
+    let s = String::from("hi");
+    let own = move || println!("{}", s); // move で所有権ごと取り込む
+    ```
+    取り込み方に応じて、クロージャは次のトレイトを実装する:
+    - `Fn`: 環境を読むだけ（何度でも呼べる）
+    - `FnMut`: 環境を変更する
+    - `FnOnce`: 環境の値を消費する（1回しか呼べないことがある）
+    関数がクロージャを受け取るときは `fn apply<F: Fn(i32) -> i32>(f: F)` のように境界で要求を書く。
+  questions:
+    - q: |-
+        スレッドに渡すクロージャに `move` が必要になることが多いのはなぜか？
+      a: |-
+        スレッドは呼び出し元より長く生きるかもしれないので、ローカル変数への借用を持ち込めない（ダングリングの恐れ）。`move` で所有権ごと渡す。
+
+- id: rust.fnmut
+  kind: code
+  subject: rust
+  title: 環境を変更するクロージャ
+  requires: [rust.closures]
+  source: TRPL Ch.13.1
+  lang: rust
+  code: |
+    fn main() {
+        let mut count = 0;
+        let inc = || count += 1;
+        inc();
+        inc();
+        println!("{}", count);
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "2 と出力される"
+      - "0 と出力される"
+      - コンパイルエラー
+    value: 2
+  explanation: |-
+    `inc` は `count` を可変借用して変更する `FnMut` なので、呼び出すには `inc` 自体を可変にする必要がある（E0596）。`let mut inc = || count += 1;` なら $2$ が出力される。
+  verify:
+    build: error
+
+- id: rust.iterators
+  kind: definition
+  subject: rust
+  title: イテレータとアダプタ
+  requires: [rust.closures, rust.vec]
+  source: TRPL Ch.13.2
+  why: |-
+    ループを「何をするか」の連鎖で書ける。添字を使わないので範囲外アクセスがなく、最適化で手書きのループと同じ速さになる（ゼロコスト抽象化）。
+  statement: |-
+    `Iterator` トレイトは `next(&mut self) -> Option<Self::Item>` を持つ。
+    - **アダプタ**（新しいイテレータを返す、遅延評価）: `map`, `filter`, `enumerate`, `zip`, `take`, `skip`, `chain`, `rev`, `flat_map`, `windows`（スライス）
+    - **消費者**（ここで初めて実行される）: `collect`, `sum`, `count`, `fold`, `any`, `all`, `find`, `max_by`, `for_each`
+    ```
+    let sq_even: Vec<u64> = (1..=10).filter(|x| x % 2 == 0).map(|x| x * x).collect();
+    let total: f64 = prices.iter().zip(&qty).map(|(p, q)| p * *q as f64).sum();
+    ```
+  questions:
+    - q: |-
+        `iter()`, `iter_mut()`, `into_iter()` の違いは？
+      a: |-
+        要素の `&T`、`&mut T`、`T`（所有権ごと）を順に返す。`into_iter()` は元のコレクションを消費する。
+
+- id: rust.lazy
+  kind: code
+  subject: rust
+  title: イテレータは遅延評価
+  requires: [rust.iterators]
+  source: TRPL Ch.13.2
+  lang: rust
+  code: |
+    fn main() {
+        let v = vec![1, 2, 3];
+        let _doubled = v.iter().map(|x| {
+            println!("visit {}", x);
+            x * 2
+        });
+        println!("done");
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "visit 1, visit 2, visit 3 の後に done"
+      - "done だけ"
+      - "done の後に visit 1, visit 2, visit 3"
+    value: 1
+  explanation: |-
+    `map` はイテレータを返すだけで、`collect` や `for` などで消費しない限りクロージャは1回も呼ばれない。`_doubled` に束縛しなければコンパイラが「iterators are lazy and do nothing unless consumed」と警告する。
+  verify:
+    stdout: "done\n"
+
+- id: rust.iter-chain
+  kind: code
+  subject: rust
+  title: アダプタの連鎖
+  requires: [rust.iterators]
+  source: std ドキュメント "Iterator"
+  lang: rust
+  code: |
+    fn main() {
+        let r: Vec<i32> = (1..=10)
+            .filter(|x| x % 3 != 0)
+            .map(|x| x * x)
+            .take(4)
+            .collect();
+        let s: i32 = r.iter().sum();
+        println!("{:?} {}", r, s);
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "[1, 4, 16, 25] 46"
+      - "[1, 4, 9, 16] 30"
+      - "[1, 4, 16, 25, 49, 64, 100] 259"
+      - "[4, 16, 25, 49] 94"
+    value: 0
+  explanation: |-
+    $3$ の倍数を除くと $1, 2, 4, 5, 7, 8, 10$。2乗して $1, 4, 16, 25, \dots$、先頭 $4$ 個をとって和は $46$。遅延評価なので、`take(4)` が満たされた時点で残りの要素は調べられない。
+  verify:
+    stdout: "[1, 4, 16, 25] 46\n"
+
+- id: rust.fib-iter
+  kind: exercise
+  subject: rust
+  title: フィボナッチ数列のイテレータを実装する
+  requires: [rust.iterators, rust.overflow]
+  source: Iterator トレイトの実装演習
+  lang: rust
+  prompt: |-
+    $F_0 = 0, F_1 = 1, F_{n+1} = F_n + F_{n-1}$ を順に返すイテレータを実装せよ。`u64` に収まらなくなったら（オーバーフローする直前で）終わること。
+    `Iterator` を実装すれば `take`, `filter`, `count` などが自動的に使えることを確かめよう。
+  starter: |
+    // ---- 解答欄 ----
+    struct Fib {
+        // TODO
+    }
+
+    impl Iterator for Fib {
+        type Item = u64;
+        fn next(&mut self) -> Option<u64> {
+            todo!()
+        }
+    }
+
+    fn fib() -> Fib {
+        todo!()
+    }
+    // ---- ここまで ----
+
+    fn main() {
+        let first: Vec<u64> = fib().take(10).collect();
+        assert_eq!(first, vec![0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
+        assert_eq!(fib().count(), 94); // F_0..=F_93 が u64 に収まる
+        assert_eq!(fib().last(), Some(12_200_160_415_121_876_738));
+        let even_sum: u64 = fib().take_while(|&x| x < 4_000_000).filter(|x| x % 2 == 0).sum();
+        assert_eq!(even_sum, 4_613_732);
+        println!("all tests passed");
+    }
+  solution: |
+    struct Fib {
+        cur: Option<u64>,
+        next: Option<u64>,
+    }
+
+    impl Iterator for Fib {
+        type Item = u64;
+        fn next(&mut self) -> Option<u64> {
+            let c = self.cur?;                 // None なら終わり
+            self.cur = self.next;
+            self.next = self.next.and_then(|n| n.checked_add(c)); // あふれたら None
+            Some(c)
+        }
+    }
+
+    fn fib() -> Fib {
+        Fib { cur: Some(0), next: Some(1) }
+    }
+  checklist:
+    - すべての assert_eq! が通った
+    - "`checked_add` を使わずに `+` で書くと、debug ビルドでパニックすることを確かめた"
+    - "`?` 演算子が `Option` にも使えることを説明できる"

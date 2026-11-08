@@ -46,8 +46,12 @@ export const isDayComplete = (s: AppState, now: Date) => !!s.completed[dayKey(no
  * 次に学ぶ概念。解放済みで未学習のもののうち、最近学んでいない科目を優先し、
  * 同じ科目内ではファイル順（= 教材の並び順）。
  */
-export function nextConcept(s: AppState, exclude: string[] = []): Item | undefined {
-  const candidates = ITEMS.filter((it) => isConcept(it) && enabled(s, it) && !s.introduced[it.id] && isUnlocked(s, it) && !exclude.includes(it.id));
+export function nextConcept(s: AppState, exclude: string[] = [], pickedToday: string[] = []): Item | undefined {
+  // 同じセットで先に選んだ概念は学習済みとみなして前提を判定する
+  const known = (id: string) => !!s.introduced[id] || pickedToday.includes(id);
+  const candidates = ITEMS.filter(
+    (it) => isConcept(it) && enabled(s, it) && !known(it.id) && it.requires.every(known) && !exclude.includes(it.id),
+  );
   if (candidates.length === 0) return undefined;
   const lastBySubject = new Map<string, string>();
   for (const [id, at] of Object.entries(s.introduced)) {
@@ -56,6 +60,7 @@ export function nextConcept(s: AppState, exclude: string[] = []): Item | undefin
     const prev = lastBySubject.get(it.subject);
     if (!prev || prev < at) lastBySubject.set(it.subject, at);
   }
+  for (const id of pickedToday) lastBySubject.set(ITEMS.find((i) => i.id === id)!.subject, '9999');
   const order = (it: Item) => SUBJECTS.findIndex((x) => x.id === it.subject);
   return [...candidates].sort(
     (a, b) => (lastBySubject.get(a.subject) ?? '').localeCompare(lastBySubject.get(b.subject) ?? '') || order(a) - order(b),
@@ -63,9 +68,11 @@ export function nextConcept(s: AppState, exclude: string[] = []): Item | undefin
 }
 
 /** 今日の1問: 数学とコードを日替わりにし、未挑戦の解放済み問題を優先 */
-export function dailyProblem(s: AppState, now: Date, exclude: string[] = []): Item | undefined {
+export function dailyProblem(s: AppState, now: Date, exclude: string[] = [], learningToday: string[] = []): Item | undefined {
+  // 今日のセットで学ぶ概念は、学習済みとみなして解放を判定する
+  const known = (id: string) => !!s.introduced[id] || learningToday.includes(id);
   const problems = ITEMS.filter(
-    (it) => !isConcept(it) && enabled(s, it) && isUnlocked(s, it) && !exclude.includes(it.id),
+    (it) => !isConcept(it) && enabled(s, it) && it.requires.every(known) && !exclude.includes(it.id),
   );
   if (problems.length === 0) return undefined;
   const dayNum = Math.floor(now.getTime() / 864e5);
@@ -78,13 +85,13 @@ export function dailyProblem(s: AppState, now: Date, exclude: string[] = []): It
   return list[dayNum % list.length];
 }
 
-/** 今日すでに始めた項目（概念・問題）があるか */
-function startedToday(s: AppState, now: Date, concept: boolean): boolean {
+/** 今日始めた項目（概念・問題）の数 */
+function startedToday(s: AppState, now: Date, concept: boolean): number {
   const today = dayKey(now);
-  return Object.entries(s.introduced).some(([id, at]) => {
+  return Object.entries(s.introduced).filter(([id, at]) => {
     const it = ITEMS.find((i) => i.id === id);
     return it && isConcept(it) === concept && dayKey(new Date(at)) === today;
-  });
+  }).length;
 }
 
 /**
@@ -97,12 +104,15 @@ export function buildDailySet(s: AppState, now: Date): Step[] {
   const due = dueCards(s, now).slice(0, s.settings.reviewCap);
   for (const id of due) steps.push({ kind: 'card', cardId: id, label: '復習' });
   for (const id of pendingCards(s)) steps.push({ kind: 'card', cardId: id, label: '新規' });
-  const concept = startedToday(s, now, true) ? undefined : nextConcept(s);
-  if (concept) {
+  const picked: string[] = [];
+  for (let k = startedToday(s, now, true); k < (s.settings.newPerDay ?? 1); k++) {
+    const concept = nextConcept(s, picked, picked);
+    if (!concept) break;
+    picked.push(concept.id);
     steps.push({ kind: 'learn', itemId: concept.id });
     for (const c of CARDS_BY_ITEM.get(concept.id) ?? []) steps.push({ kind: 'card', cardId: c.id, label: '新規' });
   }
-  const prob = startedToday(s, now, false) ? undefined : dailyProblem(s, now);
+  const prob = startedToday(s, now, false) > 0 ? undefined : dailyProblem(s, now, [], picked);
   if (prob) {
     for (const c of CARDS_BY_ITEM.get(prob.id) ?? []) {
       if (!due.includes(c.id)) steps.push({ kind: 'card', cardId: c.id, label: '今日の1問' });

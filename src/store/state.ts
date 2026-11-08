@@ -16,6 +16,8 @@ export interface Settings {
   subjects: SubjectId[];
   /** 1日の復習カードの上限 */
   reviewCap: number;
+  /** 今日のセットで学ぶ新しい概念の数 */
+  newPerDay: number;
   /** 手書きメモでペン入力のみを受け付ける（手のひらの誤タッチ防止） */
   penOnly: boolean;
 }
@@ -43,6 +45,7 @@ export const defaultState = (): AppState => ({
   settings: {
     subjects: ['linear-algebra', 'probability', 'statistics', 'algebra', 'convex', 'cpp', 'rust'],
     reviewCap: 20,
+    newPerDay: 2,
     penOnly: false,
   },
 });

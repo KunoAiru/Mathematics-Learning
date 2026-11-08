@@ -73,6 +73,15 @@ export function Settings({ state, update, replace }: { state: AppState; update: 
       </section>
 
       <section className="panel">
+        <h3>1日に学ぶ新しい概念の数</h3>
+        <div className="row">
+          <input type="range" min={1} max={5} step={1} value={st.newPerDay} onChange={(e) => set({ newPerDay: Number(e.target.value) })} />
+          <b>{st.newPerDay} 個</b>
+        </div>
+        <p className="muted small">増やすほど早く進みますが、翌日以降の復習も増えます。1つあたり約3分＋確認カード。</p>
+      </section>
+
+      <section className="panel">
         <h3>1日の復習枚数の上限</h3>
         <div className="row">
           <input type="range" min={5} max={60} step={5} value={st.reviewCap} onChange={(e) => set({ reviewCap: Number(e.target.value) })} />

@@ -242,5 +242,5 @@
   kind: problem
   subject: probability
   title: 誕生日問題とハッシュ衝突（計算）
-  requires: [prob.conditional]
+  requires: [prob.space]
   generator: prob.birthday

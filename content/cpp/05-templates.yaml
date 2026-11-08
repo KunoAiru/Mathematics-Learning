@@ -1,0 +1,342 @@
+# C++ 5: テンプレートと型推論・コンパイル時計算
+# 出典: cppreference.com, learncpp.com
+
+- id: cpp.auto
+  kind: definition
+  subject: cpp
+  title: auto と構造化束縛
+  requires: [cpp.references-pointers, cpp.vector]
+  source: cppreference.com "Placeholder type specifiers", "Structured binding declaration"
+  statement: |-
+    - `auto x = expr;` は型を推論する。ただし**参照と最上位の const は外れる**（コピーになる）。参照が欲しければ `auto&` / `const auto&`
+    - 範囲 for では、読むだけなら `const auto&`、書き換えるなら `auto&`、小さな値のコピーで良ければ `auto`
+    - 構造化束縛（C++17）でペアや構造体を分解できる
+    ```
+    std::map<std::string, int> m;
+    for (const auto& [key, value] : m) { ... }
+    auto [q, r] = std::div(17, 5);
+    ```
+  questions:
+    - q: |-
+        `for (auto s : names)`（`names` は `std::vector<std::string>`）の問題は？
+      a: |-
+        毎回文字列をコピーするので遅い（ヒープ確保が起きうる）。読むだけなら `const auto&`。
+
+- id: cpp.auto-copy
+  kind: code
+  subject: cpp
+  title: 範囲 for の auto と auto&
+  requires: [cpp.auto]
+  source: cppreference.com "Range-based for loop"
+  lang: cpp
+  code: |
+    #include <iostream>
+    #include <vector>
+
+    int main() {
+        std::vector<int> v{1, 2, 3};
+        for (auto x : v) x *= 10;
+        for (auto& y : v) y += 1;
+        std::cout << v[0] << v[1] << v[2] << '\n';
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "234"
+      - "112131"
+      - "102030"
+      - "123"
+    value: 0
+  explanation: |-
+    1つめのループの `x` は要素のコピーなので、10 倍しても `v` は変わらない。2つめの `y` は参照なので `v` 自体が 1 増える。
+  verify:
+    stdout: "234\n"
+
+- id: cpp.function-template
+  kind: definition
+  subject: cpp
+  title: 関数テンプレート
+  requires: [cpp.functions, cpp.auto]
+  source: learncpp.com Ch.11.6–11.10
+  why: |-
+    型ごとに同じ関数を書き写さずに済み、しかも実行時のコストがない。標準ライブラリ全体がこの仕組みで書かれている。
+  statement: |-
+    ```
+    template <typename T>
+    T max_of(T a, T b) { return a < b ? b : a; }
+
+    max_of(3, 5);           // T = int と推論
+    max_of<double>(3, 2.5); // 明示指定
+    ```
+    テンプレートは使われた型ごとに**コンパイル時に実体化**される（コード生成）。そのため定義は呼び出し側から見える場所（通常はヘッダ）に書く。
+  questions:
+    - q: |-
+        テンプレートを多用したときの欠点は？
+      a: |-
+        型ごとにコードが生成されるのでバイナリが大きくなり、コンパイルが遅くなる。エラーメッセージが長く読みにくい（C++20 のコンセプトで改善できる）。
+
+- id: cpp.template-deduction
+  kind: code
+  subject: cpp
+  title: テンプレート引数の推論の衝突
+  requires: [cpp.function-template]
+  source: cppreference.com "Template argument deduction"
+  lang: cpp
+  code: |
+    #include <iostream>
+
+    template <typename T>
+    T max_of(T a, T b) { return a < b ? b : a; }
+
+    int main() {
+        std::cout << max_of(1, 2.5) << '\n';
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "2.5 と出力される"
+      - "2 と出力される"
+      - コンパイルエラー
+    value: 2
+  explanation: |-
+    第1引数から `T = int`、第2引数から `T = double` が推論されて衝突し、エラーになる（推論では暗黙変換を考えない）。
+    `max_of<double>(1, 2.5)` と明示するか、`std::max<double>` を使う。
+
+- id: cpp.class-template
+  kind: definition
+  subject: cpp
+  title: クラステンプレートと非型テンプレート引数
+  requires: [cpp.function-template, cpp.class]
+  source: learncpp.com Ch.13.13, cppreference.com "Class template"
+  statement: |-
+    ```
+    template <typename T, std::size_t N>
+    class FixedStack {
+        std::array<T, N> data_{};
+        std::size_t size_ = 0;
+    public:
+        bool push(const T& x) { if (size_ == N) return false; data_[size_++] = x; return true; }
+    };
+    FixedStack<int, 16> s;
+    std::pair p{1, 2.0};    // クラステンプレートの引数推論（CTAD, C++17）
+    ```
+    型だけでなく整数などの**値**もテンプレート引数にできる（`std::array<T, N>` の `N`）。値はコンパイル時に決まっていなければならない。
+  questions:
+    - q: |-
+        `std::vector<bool>` が他の `std::vector<T>` と違う点は？
+      a: |-
+        1要素を1ビットに詰める特殊化になっていて、`v[i]` が `bool&` ではなく代理オブジェクトを返す。`bool* p = &v[0];` のようなコードが書けない。テンプレートの特殊化で振る舞いが変わる有名な例。
+
+- id: cpp.concepts
+  kind: definition
+  subject: cpp
+  title: コンセプト（C++20）
+  requires: [cpp.function-template]
+  source: cppreference.com "Constraints and concepts"
+  statement: |-
+    テンプレート引数が満たすべき条件を名前を付けて書ける。条件を満たさない型で使うと、テンプレートの奥ではなく**呼び出し箇所で分かりやすいエラー**になる。
+    ```
+    #include <concepts>
+    template <std::integral T>
+    T gcd(T a, T b) { while (b) { a %= b; std::swap(a, b); } return a; }
+
+    template <typename T>
+    concept Addable = requires(T a, T b) { { a + b } -> std::convertible_to<T>; };
+    ```
+  questions:
+    - q: |-
+        コンセプトがなかった頃、同じことをするのに使われた技法は？
+      a: |-
+        SFINAE（置き換えの失敗はエラーではない）と `std::enable_if`。書きにくく読みにくいので、C++20 以降はコンセプトを使う。
+
+- id: cpp.concepts-code
+  kind: code
+  subject: cpp
+  title: コンセプトで型を制限する
+  requires: [cpp.concepts]
+  source: cppreference.com "std::integral"
+  lang: cpp
+  code: |
+    #include <concepts>
+    #include <iostream>
+
+    template <std::integral T>
+    T half(T x) { return x / 2; }
+
+    int main() {
+        std::cout << half(7) << '\n';
+        std::cout << half(7.0) << '\n';
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "3 と 3.5 が出力される"
+      - "3 と 3 が出力される"
+      - コンパイルエラー（double は std::integral を満たさない）
+    value: 2
+  explanation: |-
+    `half(7.0)` では `T = double` だが、`std::integral<double>` が偽なので候補から外れ、呼べる関数がなくエラーになる。エラーメッセージには「制約を満たさない」と書かれる。
+  verify:
+    build: error
+
+- id: cpp.constexpr
+  kind: definition
+  subject: cpp
+  title: constexpr とコンパイル時計算
+  requires: [cpp.functions, cpp.const]
+  source: cppreference.com "constexpr specifier"
+  statement: |-
+    - `constexpr` 変数はコンパイル時に値が決まる定数
+    - `constexpr` 関数は、引数がコンパイル時に分かればコンパイル時に、そうでなければ実行時に評価される
+    - `consteval` 関数は必ずコンパイル時に評価される
+    - `static_assert(条件);` はコンパイル時に条件を検査し、偽ならコンパイルエラー
+    コンパイル時計算では未定義動作（オーバーフローなど）が**コンパイルエラーとして検出される**ので、テストとしても使える。
+  questions:
+    - q: |-
+        表（たとえば CRC の 256 要素の表）を `constexpr` で作る利点は？
+      a: |-
+        実行時の初期化コストがゼロになり、読み取り専用領域に置かれる。表の作り方をコードで書けるので、手で書き写した表より間違いがない。
+
+- id: cpp.constexpr-code
+  kind: code
+  subject: cpp
+  title: static_assert で計算を検査する
+  requires: [cpp.constexpr]
+  source: cppreference.com "static_assert declaration"
+  lang: cpp
+  code: |
+    #include <iostream>
+
+    constexpr long long fib(int n) {
+        return n < 2 ? n : fib(n - 1) + fib(n - 2);
+    }
+
+    static_assert(fib(10) == 55);
+
+    int main() {
+        std::cout << fib(20) << '\n';
+    }
+  prompt: |-
+    このプログラムはどうなるか？
+  answer:
+    type: choice
+    choices:
+      - "6765 と出力される"
+      - コンパイルエラー（static_assert が失敗）
+      - "55 と出力される"
+    value: 0
+  explanation: |-
+    $F_{10} = 55$ なので `static_assert` は通り、実行すると $F_{20} = 6765$。もし `fib` にバグがあれば、プログラムを実行する前にコンパイルが失敗する。
+  verify:
+    stdout: "6765\n"
+
+- id: cpp.variadic
+  kind: code
+  subject: cpp
+  title: 可変引数テンプレートと畳み込み式
+  requires: [cpp.function-template]
+  source: cppreference.com "Fold expressions"
+  lang: cpp
+  code: |
+    #include <iostream>
+
+    template <typename... Ts>
+    auto sum(Ts... xs) {
+        return (xs + ... + 0);
+    }
+
+    template <typename... Ts>
+    void print_all(const Ts&... xs) {
+        ((std::cout << xs << ','), ...);
+        std::cout << '\n';
+    }
+
+    int main() {
+        std::cout << sum(1, 2, 3, 4) << '\n';
+        print_all(1, "a", 2.5);
+    }
+  prompt: |-
+    出力は何か？
+  answer:
+    type: choice
+    choices:
+      - "10 と 1,a,2.5,"
+      - "10 と 1a2.5"
+      - コンパイルエラー
+      - "1234 と 1,a,2.5,"
+    value: 0
+  explanation: |-
+    `typename... Ts` は任意個の型、`xs...` は任意個の引数。`(xs + ... + 0)` は $((1 + (2 + (3 + (4 + 0)))))$ と展開される（畳み込み式, C++17）。`(expr, ...)` はカンマ演算子で各引数に `expr` を順に適用する。
+    型の違う引数を安全に受け取れるので、型安全な `printf` やログ関数が作れる。
+  verify:
+    stdout: "10\n1,a,2.5,\n"
+
+- id: cpp.stack-template
+  kind: exercise
+  subject: cpp
+  title: 汎用スタックをテンプレートで実装する
+  requires: [cpp.class-template, cpp.optional-variant, cpp.move-semantics]
+  source: クラステンプレートの総合演習
+  lang: cpp
+  prompt: |-
+    任意の型 `T` を積めるスタック `Stack<T>` を実装せよ。
+    - `void push(T x)`（値で受け取ってムーブで格納）
+    - `std::optional<T> pop()`（空なら `std::nullopt`）
+    - `const T* top() const`（空なら `nullptr`）
+    - `std::size_t size() const`, `bool empty() const`
+  starter: |
+    #include <cassert>
+    #include <iostream>
+    #include <memory>
+    #include <optional>
+    #include <string>
+    #include <vector>
+
+    // ---- 解答欄 ----
+    template <typename T>
+    class Stack {
+        // TODO
+    };
+    // ---- ここまで ----
+
+    int main() {
+        Stack<int> s;
+        assert(s.empty() && !s.pop() && s.top() == nullptr);
+        s.push(1); s.push(2);
+        assert(s.size() == 2 && *s.top() == 2);
+        assert(s.pop() == 2 && s.pop() == 1 && !s.pop());
+
+        Stack<std::unique_ptr<std::string>> u;   // ムーブしかできない型でも動くこと
+        u.push(std::make_unique<std::string>("hi"));
+        auto p = u.pop();
+        assert(p && **p == "hi");
+        std::cout << "all tests passed\n";
+    }
+  solution: |
+    template <typename T>
+    class Stack {
+    public:
+        void push(T x) { data_.push_back(std::move(x)); }
+        std::optional<T> pop() {
+            if (data_.empty()) return std::nullopt;
+            T x = std::move(data_.back());
+            data_.pop_back();
+            return x;
+        }
+        const T* top() const { return data_.empty() ? nullptr : &data_.back(); }
+        std::size_t size() const { return data_.size(); }
+        bool empty() const { return data_.empty(); }
+
+    private:
+        std::vector<T> data_;
+    };
+  checklist:
+    - すべての assert が通った
+    - "`unique_ptr` のようなムーブ専用の型でも動く理由を説明できる"
+    - "`top()` がポインタを返すとき、`push` の後にそのポインタを使うと危ない理由を説明できる"
