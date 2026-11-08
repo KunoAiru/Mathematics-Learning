@@ -5,7 +5,7 @@ import { cardsOf, ContentError, parseContent } from '../src/content/parse';
 import { GENERATORS, Rng } from '../src/generators';
 import { checkAnswer, parseList, parseNumber } from '../src/lib/answer';
 import { mathSegments, parseBlocks } from '../src/lib/markup';
-import { buildDailySet, dailyProblem, isUnlocked, nextConcept } from '../src/store/daily';
+import { buildDailySet, dailyProblem, isDayComplete, isUnlocked, nextConcept, pendingCards } from '../src/store/daily';
 import { addDays, dayKey, defaultState, review, streak } from '../src/store/state';
 
 describe('答えの判定', () => {
@@ -75,7 +75,7 @@ describe('ジェネレーター', () => {
 
 describe('ストリーク', () => {
   const today = new Date(2026, 10, 8, 12);
-  const act = (offsets: number[]) => Object.fromEntries(offsets.map((o) => [dayKey(addDays(today, -o)), 1]));
+  const act = (offsets: number[]) => Object.fromEntries(offsets.map((o) => [dayKey(addDays(today, -o)), true]));
   it('連続日数を数える', () => {
     expect(streak(act([0, 1, 2]), today).days).toBe(3);
     expect(streak(act([1, 2]), today).days).toBe(2); // 今日はまだ
@@ -97,6 +97,50 @@ describe('ストリーク', () => {
   });
 });
 
+/** Session.grade と同じ更新（カードに答えると、その項目は学習済みになる） */
+function answer(s: ReturnType<typeof defaultState>, cardId: string, at: Date) {
+  s.cards[cardId] = review(s.cards[cardId], Rating.Good, at);
+  const itemId = cardId.split('#')[0];
+  s.introduced[itemId] ??= at.toISOString();
+}
+
+describe('途中でやめたとき', () => {
+  const morning = new Date(2026, 10, 8, 9);
+  const evening = new Date(2026, 10, 8, 20);
+  it('読んだだけでやめた概念は、次も「新しい概念」として出る', () => {
+    const s = defaultState();
+    const first = buildDailySet(s, morning);
+    const learn = first.find((x) => x.kind === 'learn')!;
+    // 「読んだ」を押しても何も記録しない → ✕
+    const again = buildDailySet(s, evening);
+    expect(again.find((x) => x.kind === 'learn')).toEqual(learn);
+    expect(isDayComplete(s, evening)).toBe(false);
+  });
+  it('確認カードの途中でやめると、答えていないカードだけが残る', () => {
+    const s = defaultState();
+    const first = buildDailySet(s, morning);
+    const learn = first.find((x) => x.kind === 'learn')!;
+    if (learn.kind !== 'learn') throw new Error();
+    const conceptCards = first.filter((x) => x.kind === 'card' && x.cardId.startsWith(`${learn.itemId}#`));
+    expect(conceptCards.length).toBeGreaterThan(1);
+    const [firstCard, ...rest] = conceptCards;
+    if (firstCard.kind === 'card') answer(s, firstCard.cardId, morning);
+    const again = buildDailySet(s, evening);
+    // 新しい概念はもう出さず、残りの確認カードは「新規」として出る
+    expect(again.some((x) => x.kind === 'learn')).toBe(false);
+    for (const c of rest) if (c.kind === 'card') expect(again).toContainEqual({ kind: 'card', cardId: c.cardId, label: '新規' });
+    expect(pendingCards(s)).toEqual(rest.map((c) => (c.kind === 'card' ? c.cardId : '')));
+  });
+  it('達成は今日のセットを終えたときだけ記録され、連続日数はそれで数える', () => {
+    const s = defaultState();
+    s.activity[dayKey(morning)] = 3; // 何枚か答えただけ
+    expect(streak(s.completed, evening).days).toBe(0);
+    s.completed[dayKey(morning)] = true;
+    expect(isDayComplete(s, evening)).toBe(true);
+    expect(streak(s.completed, evening).days).toBe(1);
+  });
+});
+
 describe('デイリーセット', () => {
   it('最初は前提のない概念から始まり、1問がつく', () => {
     const s = defaultState();
@@ -113,11 +157,8 @@ describe('デイリーセット', () => {
   it('新しい概念と今日の1問は1日1回まで', () => {
     const s = defaultState();
     const now = new Date(2026, 10, 8, 20);
-    const first = buildDailySet(s, now);
-    for (const st of first) {
-      const id = st.kind === 'learn' ? st.itemId : st.cardId.split('#')[0];
-      s.introduced[id] = new Date(2026, 10, 8, 9).toISOString();
-    }
+    const morning = new Date(2026, 10, 8, 9);
+    for (const st of buildDailySet(s, morning)) if (st.kind === 'card') answer(s, st.cardId, morning);
     expect(buildDailySet(s, now).filter((x) => x.kind === 'learn' || (x.kind === 'card' && x.label !== '復習'))).toEqual([]);
     // 翌日はまた出る
     expect(buildDailySet(s, new Date(2026, 10, 9, 9)).some((x) => x.kind === 'learn')).toBe(true);

@@ -1,21 +1,25 @@
 import { getItem, ITEMS } from '../content';
 import { isConcept, SUBJECTS } from '../content/types';
-import { buildDailySet, buildExtra, masteryOf, type Step } from '../store/daily';
+import { buildDailySet, buildExtra, isDayComplete, masteryOf, type Step } from '../store/daily';
 import { addDays, dayKey, streak, type AppState } from '../store/state';
 import { MdInline } from '../components/Tex';
 
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 
-export function Today({ state, start }: { state: AppState; start: (steps: Step[]) => void }) {
+export function Today({ state, start }: { state: AppState; start: (steps: Step[], daily?: boolean) => void }) {
   const now = new Date();
   const set = buildDailySet(state, now);
   const reviews = set.filter((s) => s.kind === 'card' && s.label === '復習').length;
+  const pending = set.filter((s) => s.kind === 'card' && s.label === '新規' && !set.some((x) => x.kind === 'learn' && s.cardId.startsWith(`${x.itemId}#`))).length;
   const learn = set.find((s) => s.kind === 'learn');
   const problem = set.find((s) => s.kind === 'card' && s.label === '今日の1問');
   const problemItem = problem && problem.kind === 'card' ? getItem(problem.cardId.split('#')[0]) : undefined;
-  const doneToday = (state.activity[dayKey(now)] ?? 0) > 0;
-  const st = streak(state.activity, now);
-  const minutes = Math.max(3, Math.round(reviews * 0.4 + (learn ? 3 : 0) + (problemItem ? 3 : 0)));
+  const doneToday = isDayComplete(state, now);
+  const inProgress = !doneToday && (state.activity[dayKey(now)] ?? 0) > 0;
+  const st = streak(state.completed, now);
+  const minutes = Math.max(3, Math.round((reviews + pending) * 0.4 + (learn ? 3 : 0) + (problemItem ? 3 : 0)));
+  const extraConcept = buildExtra(state, now, 'concept');
+  const extraProblem = buildExtra(state, now, 'problem');
   const days = Array.from({ length: 7 }, (_, k) => addDays(now, k - 6));
 
   const concepts = ITEMS.filter((it) => isConcept(it) && state.settings.subjects.includes(it.subject));
@@ -34,7 +38,7 @@ export function Today({ state, start }: { state: AppState; start: (steps: Step[]
         <div className="week">
           {days.map((d) => {
             const k = dayKey(d);
-            const on = (state.activity[k] ?? 0) > 0;
+            const on = !!state.completed[k];
             return (
               <div key={k} className={`day ${on ? 'on' : ''} ${k === dayKey(now) ? 'today' : ''}`}>
                 <div className="dot" />
@@ -48,14 +52,38 @@ export function Today({ state, start }: { state: AppState; start: (steps: Step[]
         </p>
       </header>
 
-      {set.length > 0 ? (
+      {doneToday ? (
         <section className="panel">
-          <h3>{doneToday ? '続きをやる' : '今日のセット'}</h3>
+          <h3>今日は達成 ✓</h3>
+          <p className="muted small">ここでやめても十分です。余力があれば:</p>
+          <div className="col">
+            {set.length > 0 && (
+              <button className="ghost wide" onClick={() => start(set)}>
+                期限の来た復習をやる（{set.length} 枚）
+              </button>
+            )}
+            <button className="ghost wide" onClick={() => start(extraConcept)} disabled={extraConcept.length === 0}>
+              ＋ 新しい概念を学ぶ
+            </button>
+            <button className="ghost wide" onClick={() => start(extraProblem)} disabled={extraProblem.length === 0}>
+              ＋ 問題を解く
+            </button>
+          </div>
+        </section>
+      ) : set.length > 0 ? (
+        <section className="panel">
+          <h3>{inProgress ? '今日のセット（途中）' : '今日のセット'}</h3>
           <ul className="plan">
             <li>
               <span className="plan-k">復習</span>
               <span>{reviews > 0 ? `${reviews} 枚` : 'なし'}</span>
             </li>
+            {pending > 0 && (
+              <li>
+                <span className="plan-k">確認の続き</span>
+                <span>{pending} 枚</span>
+              </li>
+            )}
             <li>
               <span className="plan-k">新しい概念</span>
               <span>{learn && learn.kind === 'learn' ? <MdInline src={getItem(learn.itemId).title} /> : '—'}</span>
@@ -65,19 +93,19 @@ export function Today({ state, start }: { state: AppState; start: (steps: Step[]
               <span>{problemItem ? <MdInline src={problemItem.title} /> : '—'}</span>
             </li>
           </ul>
-          <button className="primary wide big-btn" onClick={() => start(set)}>
-            はじめる（約 {minutes} 分）
+          <button className="primary wide big-btn" onClick={() => start(set, true)}>
+            {inProgress ? `続きから（残り ${set.length} 枚・約 ${minutes} 分）` : `はじめる（約 ${minutes} 分）`}
           </button>
-          <p className="muted small center">1枚だけでも今日は達成。疲れた日は最初の1枚だけやろう。</p>
+          <p className="muted small center">途中でやめても、次に開くと続きから再開できます。最後までやると今日の達成です。</p>
         </section>
       ) : (
         <section className="panel">
-          <h3>{doneToday ? '今日は達成 ✓' : 'いま出題できるものはありません'}</h3>
+          <h3>いま出題できるものはありません</h3>
           <div className="col">
-            <button className="ghost wide" onClick={() => start(buildExtra(state, now, 'concept'))} disabled={buildExtra(state, now, 'concept').length === 0}>
+            <button className="ghost wide" onClick={() => start(extraConcept)} disabled={extraConcept.length === 0}>
               ＋ 新しい概念を学ぶ
             </button>
-            <button className="ghost wide" onClick={() => start(buildExtra(state, now, 'problem'))} disabled={buildExtra(state, now, 'problem').length === 0}>
+            <button className="ghost wide" onClick={() => start(extraProblem)} disabled={extraProblem.length === 0}>
               ＋ 問題を解く
             </button>
           </div>

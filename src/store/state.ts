@@ -27,6 +27,8 @@ export interface AppState {
   introduced: Record<string, string>;
   /** 日付(YYYY-MM-DD) → その日に回答したカード数 */
   activity: Record<string, number>;
+  /** 日付(YYYY-MM-DD) → その日の「今日のセット」を最後までやり終えた */
+  completed: Record<string, boolean>;
   reports: Report[];
   settings: Settings;
 }
@@ -36,6 +38,7 @@ export const defaultState = (): AppState => ({
   cards: {},
   introduced: {},
   activity: {},
+  completed: {},
   reports: [],
   settings: {
     subjects: ['linear-algebra', 'probability', 'statistics', 'algebra', 'convex', 'cpp', 'rust'],
@@ -103,8 +106,8 @@ export function addDays(d: Date, n: number): Date {
  * 連続日数。1回休んでも、その前後 6 日以内に別の休みがなければ途切れない（週1回の「おやすみ」）。
  * 2日続けて休むと途切れる。今日まだやっていなくても、昨日までの連続は表示する。
  */
-export function streak(activity: Record<string, number>, today: Date): { days: number; freezeUsed: boolean } {
-  const done = (d: Date) => (activity[dayKey(d)] ?? 0) > 0;
+export function streak(completed: Record<string, boolean>, today: Date): { days: number; freezeUsed: boolean } {
+  const done = (d: Date) => !!completed[dayKey(d)];
   const diffDays = (a: Date, b: Date) => Math.round((a.getTime() - b.getTime()) / 864e5);
   let cur = done(today) ? today : addDays(today, -1);
   let days = 0;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Rating, type Grade } from 'ts-fsrs';
 import { CARD_BY_ID, CARDS_BY_ITEM, getItem } from '../content';
 import { buildExtra, type Step } from '../store/daily';
@@ -9,6 +9,8 @@ import { MdInline } from '../components/Tex';
 
 interface Props {
   initial: Step[];
+  /** 今日のセットなら、最後までやり終えたときに「達成」を記録する */
+  daily: boolean;
   state: AppState;
   update: (fn: (s: AppState) => AppState) => void;
   onExit: () => void;
@@ -18,13 +20,20 @@ interface Props {
 
 const stepItemId = (s: Step) => (s.kind === 'learn' ? s.itemId : CARD_BY_ID.get(s.cardId)!.itemId);
 
-export function Session({ initial, state, update, onExit, openMemo, openReport }: Props) {
+export function Session({ initial, daily, state, update, onExit, openMemo, openReport }: Props) {
   const [steps, setSteps] = useState<Step[]>(initial);
   const [i, setI] = useState(0);
   const [requeued, setRequeued] = useState<Record<string, number>>({});
   const [stats, setStats] = useState({ answered: 0, ok: 0 });
 
   const step = steps[i] as Step | undefined;
+  const finished = !step;
+
+  useEffect(() => {
+    if (!finished || !daily) return;
+    const k = dayKey(new Date());
+    update((s) => (s.completed[k] ? s : { ...s, completed: { ...s.completed, [k]: true } }));
+  }, [finished, daily, update]);
 
   const bump = (s: AppState, now: Date): AppState['activity'] => {
     const k = dayKey(now);
@@ -49,15 +58,7 @@ export function Session({ initial, state, update, onExit, openMemo, openReport }
     setI(i + 1);
   };
 
-  const learned = (itemId: string) => {
-    const now = new Date();
-    update((s) => ({
-      ...s,
-      introduced: s.introduced[itemId] ? s.introduced : { ...s.introduced, [itemId]: now.toISOString() },
-      activity: bump(s, now),
-    }));
-    setI(i + 1);
-  };
+  const learned = () => setI(i + 1);
 
   const more = (what: 'concept' | 'problem') => {
     const extra = buildExtra(state, new Date(), what);
@@ -66,7 +67,7 @@ export function Session({ initial, state, update, onExit, openMemo, openReport }
   };
 
   if (!step) {
-    const st = streak(state.activity, new Date());
+    const st = streak(state.completed, new Date());
     const canConcept = buildExtra(state, new Date(), 'concept').length > 0;
     const canProblem = buildExtra(state, new Date(), 'problem').length > 0;
     return (
@@ -75,7 +76,7 @@ export function Session({ initial, state, update, onExit, openMemo, openReport }
           <div className="flame">🔥</div>
           <div className="big">{st.days} 日連続</div>
           <p>
-            今日のセット完了！ {stats.answered} 枚に回答（{stats.ok} 枚できた）
+            {daily ? '今日のセット完了！' : 'おつかれさま！'} {stats.answered} 枚に回答（{stats.ok} 枚できた）
           </p>
         </div>
         <p className="muted">
@@ -129,7 +130,7 @@ export function Session({ initial, state, update, onExit, openMemo, openReport }
           </div>
           <ItemContent item={item} />
           <p className="tip">✍️ 定義や主張を、メモに自分の手で1回書き写してみよう。書くと覚える。</p>
-          <button className="primary wide" onClick={() => learned(itemId)}>
+          <button className="primary wide" onClick={learned}>
             読んだ → 確認問題へ（{(CARDS_BY_ITEM.get(itemId) ?? []).length} 枚）
           </button>
         </div>

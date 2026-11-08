@@ -23,7 +23,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [tab, setTab] = useState<Tab>('today');
-  const [session, setSession] = useState<Step[] | null>(null);
+  const [session, setSession] = useState<{ steps: Step[]; daily: boolean } | null>(null);
   const [sessionKey, setSessionKey] = useState(0);
   const [detail, setDetail] = useState<string[]>([]);
   const [memo, setMemo] = useState<{ id: string; title: string; deletable?: boolean } | null>(null);
@@ -51,10 +51,10 @@ export default function App() {
 
   if (!state) return <div className="loading">読み込み中…</div>;
 
-  const start = (steps: Step[]) => {
+  const start = (steps: Step[], daily = false) => {
     if (steps.length === 0) return;
     setDetail([]);
-    setSession(steps);
+    setSession({ steps, daily });
     setSessionKey((k) => k + 1);
   };
   const openItem = (id: string) => setDetail((d) => [...d, id]);
@@ -65,7 +65,8 @@ export default function App() {
       {session ? (
         <Session
           key={sessionKey}
-          initial={session}
+          initial={session.steps}
+          daily={session.daily}
           state={state}
           update={update}
           onExit={() => setSession(null)}
@@ -98,7 +99,7 @@ export default function App() {
           itemId={detail[detail.length - 1]}
           onClose={() => setDetail((d) => d.slice(0, -1))}
           openItem={openItem}
-          start={start}
+          start={(steps) => start(steps)}
           openMemo={openMemo}
           openReport={(itemId) => setReport({ itemId })}
         />

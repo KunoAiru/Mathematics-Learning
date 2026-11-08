@@ -30,6 +30,19 @@ export function dueCards(s: AppState, now: Date): string[] {
 }
 
 /**
+ * 学習済みの項目なのに、まだ一度も答えていないカード。
+ * （確認問題の途中でやめた場合や、教材にあとから確認問題を追加した場合）
+ */
+export function pendingCards(s: AppState): string[] {
+  return CARDS.filter((c) => {
+    const it = ITEMS.find((i) => i.id === c.itemId)!;
+    return s.introduced[c.itemId] && enabled(s, it) && !s.cards[c.id];
+  }).map((c) => c.id);
+}
+
+export const isDayComplete = (s: AppState, now: Date) => !!s.completed[dayKey(now)];
+
+/**
  * 次に学ぶ概念。解放済みで未学習のもののうち、最近学んでいない科目を優先し、
  * 同じ科目内ではファイル順（= 教材の並び順）。
  */
@@ -77,11 +90,13 @@ function startedToday(s: AppState, now: Date, concept: boolean): boolean {
 /**
  * 今日のセット: 復習 → 新しい概念1つ（読む→すぐ確認）→ 今日の1問。
  * 新しい概念と今日の1問は1日1回まで（それ以上は「もっとやる」から）。
+ * 途中でやめても、答えたカードは期限が先に延びるので、残りだけが「続き」として出る。
  */
 export function buildDailySet(s: AppState, now: Date): Step[] {
   const steps: Step[] = [];
   const due = dueCards(s, now).slice(0, s.settings.reviewCap);
   for (const id of due) steps.push({ kind: 'card', cardId: id, label: '復習' });
+  for (const id of pendingCards(s)) steps.push({ kind: 'card', cardId: id, label: '新規' });
   const concept = startedToday(s, now, true) ? undefined : nextConcept(s);
   if (concept) {
     steps.push({ kind: 'learn', itemId: concept.id });
