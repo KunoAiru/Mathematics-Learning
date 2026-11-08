@@ -11,13 +11,13 @@ export function Today({ state, start }: { state: AppState; start: (steps: Step[]
   const set = buildDailySet(state, now);
   const reviews = set.filter((s) => s.kind === 'card' && s.label === '復習').length;
   const pending = set.filter((s) => s.kind === 'card' && s.label === '新規' && !set.some((x) => x.kind === 'learn' && s.cardId.startsWith(`${x.itemId}#`))).length;
-  const learn = set.find((s) => s.kind === 'learn');
+  const learns = set.flatMap((s) => (s.kind === 'learn' ? [s.itemId] : []));
   const problem = set.find((s) => s.kind === 'card' && s.label === '今日の1問');
   const problemItem = problem && problem.kind === 'card' ? getItem(problem.cardId.split('#')[0]) : undefined;
   const doneToday = isDayComplete(state, now);
   const inProgress = !doneToday && (state.activity[dayKey(now)] ?? 0) > 0;
   const st = streak(state.completed, now);
-  const minutes = Math.max(3, Math.round((reviews + pending) * 0.4 + (learn ? 3 : 0) + (problemItem ? 3 : 0)));
+  const minutes = Math.max(3, Math.round((reviews + pending) * 0.4 + learns.length * 3 + (problemItem ? 3 : 0)));
   const extraConcept = buildExtra(state, now, 'concept');
   const extraProblem = buildExtra(state, now, 'problem');
   const days = Array.from({ length: 7 }, (_, k) => addDays(now, k - 6));
@@ -86,7 +86,16 @@ export function Today({ state, start }: { state: AppState; start: (steps: Step[]
             )}
             <li>
               <span className="plan-k">新しい概念</span>
-              <span>{learn && learn.kind === 'learn' ? <MdInline src={getItem(learn.itemId).title} /> : '—'}</span>
+              <span>
+                {learns.length === 0
+                  ? '—'
+                  : learns.map((id, i) => (
+                      <span key={id}>
+                        {i > 0 && '、'}
+                        <MdInline src={getItem(id).title} />
+                      </span>
+                    ))}
+              </span>
             </li>
             <li>
               <span className="plan-k">今日の1問</span>

@@ -1,0 +1,262 @@
+# 統計学 2: 推定・検定・ベイズ・回帰
+# 出典: OpenIntro Statistics 4th ed.（無料公開）, Grinstead & Snell
+
+- id: stat.mle
+  kind: definition
+  subject: statistics
+  title: 最尤推定
+  requires: [stat.unbiased, prob.expectation]
+  source: OpenIntro Statistics 4e（関連 Ch.5）, 数理統計の標準的な内容
+  why: |-
+    実験データから物理定数や故障率を推定する、機械学習で損失関数を決める（二乗誤差・交差エントロピーは最尤推定から出てくる）など、モデルとデータをつなぐ最も基本的な方法。
+  statement: |-
+    独立なデータ $x_1, \dots, x_n$ がパラメータ $\theta$ の確率分布 $p(x \mid \theta)$ に従うとき、**尤度**を
+    $$L(\theta) = \prod_{i=1}^n p(x_i \mid \theta)$$
+    とし、これを最大にする $\hat\theta$ を**最尤推定量**という。計算では対数尤度 $\ell(\theta) = \sum_i \log p(x_i \mid \theta)$ を最大化する（積が和になり、数値的にも安定）。
+    性質: 標本が大きいと真の値に近づき（一致性）、近似的に正規分布に従う。$g(\theta)$ の最尤推定量は $g(\hat\theta)$（不変性）。
+  questions:
+    - q: |-
+        正規分布 $N(\mu, \sigma^2)$（$\sigma$ 既知）で $\mu$ の最尤推定を考えると、最小二乗法とどう関係するか？
+      a: |-
+        $\ell(\mu) = -\frac{1}{2\sigma^2}\sum(x_i - \mu)^2 + \text{const}$ なので、最尤推定は二乗誤差の最小化と同じ。回帰でも、誤差が正規分布なら最小二乗法 = 最尤推定。
+    - q: |-
+        尤度 $L(\theta)$ は $\theta$ の確率分布か？
+      a: |-
+        ちがう。データを固定して $\theta$ の関数とみたもので、$\theta$ について積分しても $1$ になるとは限らない。$\theta$ の分布を考えるのはベイズ推定。
+
+- id: stat.mle-calc
+  kind: problem
+  subject: statistics
+  title: 最尤推定値（計算）
+  requires: [stat.mle]
+  generator: stat.mle
+
+- id: stat.mle-normal
+  kind: theorem
+  subject: statistics
+  title: 正規分布の最尤推定
+  requires: [stat.mle, stat.sample-variance]
+  source: 数理統計の標準的な内容
+  statement: |-
+    $X_1, \dots, X_n$ が独立に $N(\mu, \sigma^2)$ に従うとき、$(\mu, \sigma^2)$ の最尤推定量は
+    $$\hat\mu = \bar{X}, \qquad \hat\sigma^2 = \frac1n\sum_{i=1}^n (X_i - \bar{X})^2.$$
+    $\hat\sigma^2$ は $n$ で割るので**不偏ではない**（$E[\hat\sigma^2] = \frac{n-1}{n}\sigma^2$）。
+  proof:
+    - |-
+      対数尤度は $\ell(\mu, \sigma^2) = -\frac n2\log(2\pi\sigma^2) - \frac{1}{2\sigma^2}\sum_i (x_i - \mu)^2$。
+    - |-
+      $\mu$ で偏微分して $0$: $\frac{1}{\sigma^2}\sum_i (x_i - \mu) = 0$ より $\hat\mu = \bar{x}$。
+    - |-
+      $\sigma^2$ で偏微分して $0$: $-\frac{n}{2\sigma^2} + \frac{1}{2\sigma^4}\sum_i (x_i - \hat\mu)^2 = 0$ より $\hat\sigma^2 = \frac1n\sum_i (x_i - \bar{x})^2$。
+    - |-
+      標本分散の不偏性の定理より $E\left[\sum (X_i - \bar X)^2\right] = (n-1)\sigma^2$ なので $E[\hat\sigma^2] = \frac{n-1}{n}\sigma^2$。
+  questions:
+    - q: |-
+        最尤推定量が不偏でないことは問題か？
+      a: |-
+        $n$ が大きければ偏りは $O(1/n)$ で消える。平均二乗誤差では $n$ で割るほうが $n - 1$ で割るより小さいこともある。不偏性は推定量の良さの一つの基準にすぎない。
+
+- id: stat.hypothesis-test
+  kind: definition
+  subject: statistics
+  title: 仮説検定の枠組み
+  requires: [stat.confidence-interval]
+  source: OpenIntro Statistics 4e, Ch.5.3
+  statement: |-
+    1. **帰無仮説** $H_0$（例: 効果なし）と**対立仮説** $H_1$ を立てる
+    2. $H_0$ のもとで分布が分かる**検定統計量**を決める
+    3. **有意水準** $\alpha$（例: $0.05$）を決め、$H_0$ のもとで確率 $\alpha$ でしか起きない「極端な値」の領域を棄却域とする
+    4. データから統計量を計算し、棄却域に入れば $H_0$ を棄却する
+
+    誤りには2種類ある:
+    - **第1種の誤り**: $H_0$ が真なのに棄却する（確率 $\alpha$）
+    - **第2種の誤り**: $H_1$ が真なのに棄却しない（確率 $\beta$）。$1 - \beta$ を**検出力**という
+  questions:
+    - q: |-
+        「$H_0$ を棄却できなかった」ことは「$H_0$ が正しい」ことを示すか？
+      a: |-
+        示さない。標本が小さく検出力が低いだけかもしれない。「証拠が不十分だった」としか言えない。
+    - q: |-
+        侵入検知システムの「誤検知」と「見逃し」は、それぞれ第何種の誤りか？（$H_0$: 正常な通信）
+      a: |-
+        誤検知（正常なのに警報）が第1種、見逃し（攻撃なのに警報なし）が第2種。閾値を動かすと一方が減ると他方が増えるトレードオフがある。
+
+- id: stat.p-value
+  kind: definition
+  subject: statistics
+  title: p 値
+  requires: [stat.hypothesis-test]
+  source: OpenIntro Statistics 4e, Ch.5.3
+  statement: |-
+    **p 値**とは、$H_0$ が正しいと仮定したときに、実際に観測した値と**同じかそれ以上に極端な**統計量が得られる確率。
+    $p \le \alpha$ なら有意水準 $\alpha$ で $H_0$ を棄却する。
+    よくある誤解:
+    - p 値は「$H_0$ が正しい確率」ではない
+    - p 値は効果の大きさを表さない（標本が大きければ、ごく小さな差でも p 値は小さくなる）
+    - $p = 0.049$ と $p = 0.051$ に本質的な違いはない
+  questions:
+    - q: |-
+        「新薬の効果の検定で $p = 0.01$」から言えることと言えないことは？
+      a: |-
+        言えること: 効果がないとすると、これほど極端な結果は1%の確率でしか起きない。言えないこと: 薬が効く確率が99%、効果が大きい、臨床的に意味がある。効果の大きさは信頼区間で示す。
+
+- id: stat.z-test
+  kind: problem
+  subject: statistics
+  title: 平均の z 検定（計算）
+  requires: [stat.p-value]
+  generator: stat.z-test
+
+- id: stat.t-test
+  kind: definition
+  subject: statistics
+  title: t 検定
+  requires: [stat.p-value, stat.sample-variance]
+  source: OpenIntro Statistics 4e, Ch.7.1–7.3
+  statement: |-
+    母分散が未知のとき、$\sigma$ を標本標準偏差 $S$ で置き換えた
+    $$T = \frac{\bar{X} - \mu_0}{S/\sqrt{n}}$$
+    は、正規母集団なら $H_0$ のもとで**自由度 $n - 1$ の t 分布**に従う。t 分布は正規分布より裾が重く、$n$ が大きいと正規分布に近づく。
+    - 対応のある2群（同じ人の前後など）は差をとって1標本の t 検定
+    - 独立な2群は2標本の t 検定（分散が等しいと仮定しない Welch の方法が既定として安全）
+  questions:
+    - q: |-
+        $n$ が小さいときに z 検定（$\sigma$ に $S$ を代入して正規分布で判定）を使うと何が起こるか？
+      a: |-
+        $S$ のばらつきを無視しているので棄却域が狭すぎ、第1種の誤りの確率が名目の $\alpha$ より大きくなる。
+
+- id: stat.multiple-testing
+  kind: theorem
+  subject: statistics
+  title: 多重検定とボンフェローニ補正
+  requires: [stat.p-value, prob.space]
+  source: OpenIntro Statistics 4e, Ch.7.5
+  why: |-
+    20個の指標を有意水準5%で調べれば、効果がなくても平均1個は「有意」になる。A/B テストや遺伝子解析、論文の再現性問題（p ハッキング）の根本。
+  statement: |-
+    $m$ 個の検定をそれぞれ有意水準 $\alpha/m$ で行うと、帰無仮説がすべて真であっても**少なくとも1つを誤って棄却する確率**（ファミリーワイズエラー率）は $\alpha$ 以下になる。
+  proof:
+    - |-
+      $A_i$ を「$i$ 番目の検定で（真の）帰無仮説を誤って棄却する」事象とする。各検定は水準 $\alpha/m$ なので $P(A_i) \le \alpha/m$。
+    - |-
+      少なくとも1つ誤る確率は $P(A_1 \cup \dots \cup A_m)$。
+    - |-
+      和集合上界（ユニオンバウンド）より $P\left(\bigcup_i A_i\right) \le \sum_i P(A_i) \le m \cdot \frac{\alpha}{m} = \alpha$。検定どうしの独立性は不要。
+  questions:
+    - q: |-
+        ボンフェローニ補正の欠点は？
+      a: |-
+        保守的すぎて検出力が大きく落ちる。多数の検定では、誤って棄却したものの「割合」を抑える偽発見率（FDR）の制御（Benjamini–Hochberg 法）がよく使われる。
+
+- id: stat.bayes-inference
+  kind: definition
+  subject: statistics
+  title: ベイズ推定と共役事前分布
+  requires: [prob.bayes, stat.mle]
+  source: Grinstead & Snell, Ch.4（ベイズの定理）, 数理統計の標準的な内容
+  statement: |-
+    パラメータ $\theta$ を確率変数とみなし、**事前分布** $p(\theta)$ をデータで更新して**事後分布**を得る:
+    $$p(\theta \mid x) = \frac{p(x \mid \theta)\,p(\theta)}{p(x)} \propto p(x \mid \theta)\,p(\theta).$$
+    事後分布が事前分布と同じ形になる組を**共役**という。例: 二項分布の成功確率に $\mathrm{Beta}(\alpha, \beta)$ 事前分布 → $k$ 回成功・$n - k$ 回失敗を見たら事後分布は $\mathrm{Beta}(\alpha + k, \beta + n - k)$。
+    事後分布から作る**信用区間**は「$\theta$ がこの区間に入る確率が 95%」と直接解釈できる（信頼区間とは意味が違う）。
+  questions:
+    - q: |-
+        データが非常に多いとき、ベイズ推定と最尤推定の結果はどうなるか？
+      a: |-
+        尤度が事前分布を圧倒し、事後分布は最尤推定値のまわりに集中する。事前分布が効くのはデータが少ないとき（ゼロ頻度問題の回避など）。
+
+- id: stat.beta-posterior
+  kind: problem
+  subject: statistics
+  title: ベータ事後分布の平均（計算）
+  requires: [stat.bayes-inference]
+  generator: stat.beta-posterior
+
+- id: stat.bootstrap
+  kind: definition
+  subject: statistics
+  title: ブートストラップ法
+  requires: [stat.confidence-interval]
+  source: OpenIntro Statistics 4e（関連 Ch.5）, 統計学の標準的な手法
+  statement: |-
+    手元のデータ $x_1, \dots, x_n$ から**重複を許して** $n$ 個を選び直す（リサンプリング）ことを何千回も繰り返し、そのたびに推定量（中央値、相関係数など）を計算する。その値のばらつきで、推定量の標準誤差や信頼区間を見積もる。
+    数式で分布を導けない推定量にも使える。プログラムで数行で書ける。
+  questions:
+    - q: |-
+        ブートストラップがうまくいかない例を挙げよ。
+      a: |-
+        標本の最大値（母集団の上限の推定）、データが少なすぎる場合、データが独立でない場合（時系列はブロックごとにリサンプリングする必要がある）。
+
+- id: stat.correlation
+  kind: definition
+  subject: statistics
+  title: 共分散と相関係数
+  requires: [prob.variance, la.cauchy-schwarz]
+  source: OpenIntro Statistics 4e, Ch.8.1
+  statement: |-
+    $\operatorname{Cov}(X, Y) = E[(X - \mu_X)(Y - \mu_Y)]$、**相関係数** $\rho = \dfrac{\operatorname{Cov}(X, Y)}{\sigma_X\sigma_Y}$。
+    - コーシー・シュワルツの不等式より $-1 \le \rho \le 1$。$|\rho| = 1$ はデータが完全に一直線上にあるとき
+    - $\rho$ は**直線的な**関係の強さだけを測る
+    - 独立なら $\rho = 0$ だが、逆は成り立たない
+  questions:
+    - q: |-
+        $\rho = 0$ だが独立でない例を挙げよ。
+      a: |-
+        $X$ が $-1, 0, 1$ を等確率でとり $Y = X^2$。$Y$ は $X$ で完全に決まるが、$\operatorname{Cov}(X, Y) = E[X^3] - E[X]E[X^2] = 0$。
+    - q: |-
+        「アイスの売上と水難事故に強い相関がある」から何が言えるか？
+      a: |-
+        因果関係は言えない。気温という共通の原因（交絡因子）が両方を増やしているだけかもしれない。
+
+- id: stat.correlation-calc
+  kind: problem
+  subject: statistics
+  title: 相関係数（計算）
+  requires: [stat.correlation]
+  generator: stat.correlation
+
+- id: stat.regression-calc
+  kind: problem
+  subject: statistics
+  title: 回帰直線（計算）
+  requires: [stat.least-squares]
+  generator: stat.regression
+
+- id: stat.overfitting
+  kind: definition
+  subject: statistics
+  title: 過学習と交差検証
+  requires: [stat.least-squares, stat.unbiased]
+  source: OpenIntro Statistics 4e, Ch.9
+  why: |-
+    実験データに複雑なモデルを当てはめると、手元のデータには合うが新しいデータでは外れる。研究結果の信頼性を左右する、最も実践的な統計の知識の一つ。
+  statement: |-
+    - モデルを複雑にすると訓練データへの誤差は必ず減るが、新しいデータへの誤差（汎化誤差）はある所から増える（**過学習**）
+    - 予測誤差 ≈ バイアス² + 分散 + ノイズ。単純なモデルはバイアスが大きく、複雑なモデルは分散が大きい
+    - 汎化誤差はモデル選択に使っていないデータで測る。**$k$ 分割交差検証**: データを $k$ 個に分け、1つで評価・残りで学習を $k$ 回繰り返して平均する
+    - 正則化（リッジ $\lambda\|w\|^2$、LASSO $\lambda\|w\|_1$）で複雑さを抑える
+  questions:
+    - q: |-
+        データ $n$ 点に $n - 1$ 次の多項式を当てはめると何が起こるか？
+      a: |-
+        すべての点を正確に通り訓練誤差は $0$ になるが、点の間で大きく振動し、新しい点の予測はひどく外れる（ルンゲ現象に似た振る舞い）。
+    - q: |-
+        テストデータの結果を見てハイパーパラメータを調整し直すと何がまずいか？
+      a: |-
+        テストデータの情報がモデル選択に漏れ、テスト誤差が楽観的になる。調整は検証データか交差検証で行い、テストデータは最後に1回だけ使う。
+
+- id: stat.causation
+  kind: definition
+  subject: statistics
+  title: 交絡とシンプソンのパラドックス
+  requires: [stat.correlation]
+  source: OpenIntro Statistics 4e, Ch.1.3–1.4
+  statement: |-
+    観察データの相関は因果を意味しない。原因と結果の両方に影響する**交絡因子**があると、見かけの関係が生じたり、逆転したりする。
+    **シンプソンのパラドックス**: グループごとに見るとどのグループでも A が B より良いのに、全体をまとめると B のほうが良く見えることがある（グループの大きさの偏りのため）。
+    因果を調べる最も確実な方法は**無作為化比較試験**（処置をランダムに割り当てると、交絡因子が平均的に釣り合う）。
+  questions:
+    - q: |-
+        シンプソンのパラドックスの例を作れ。
+      a: |-
+        腎結石の治療の有名なデータ（Charig ら, 1986）: 治療 A は小さい結石で $81/87 \approx 93\%$、大きい結石で $192/263 \approx 73\%$ 成功。治療 B は小さい結石で $234/270 \approx 87\%$、大きい結石で $55/80 \approx 69\%$。どちらでも A が上だが、合計すると A は $273/350 = 78\%$、B は $289/350 \approx 83\%$ で B が上に見える。A が難しい大きな結石に多く使われたため（結石の大きさが交絡因子）。

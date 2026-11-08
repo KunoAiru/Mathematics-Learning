@@ -1,0 +1,308 @@
+# 抽象代数学 2: 巡回群・置換・準同型・環・体
+# 出典の章番号は Judson, Abstract Algebra: Theory and Applications（無料公開）
+
+- id: alg.cyclic
+  kind: definition
+  subject: algebra
+  title: 巡回群
+  requires: [alg.subgroup]
+  source: Judson AATA, Ch.4
+  statement: |-
+    群 $G$ がある元 $g$ のべき全体 $\langle g \rangle = \{ g^k : k \in \mathbb{Z} \}$ に一致するとき、$G$ を**巡回群**、$g$ を**生成元**という。
+    - 位数 $n$ の巡回群はすべて $\mathbb{Z}/n\mathbb{Z}$（足し算）と同型
+    - 巡回群の部分群はまた巡回群で、$n$ の各約数 $d$ に対し位数 $d$ の部分群がちょうど1つある
+    - 位数 $n$ の元 $g$ について、$g^k$ の位数は $n / \gcd(n, k)$。特に $g^k$ が生成元 $\iff \gcd(n, k) = 1$
+  questions:
+    - q: |-
+        $\mathbb{Z}/12\mathbb{Z}$ の生成元はいくつあるか？
+      a: |-
+        $\gcd(k, 12) = 1$ となる $k \in \{1, 5, 7, 11\}$ の $4$ 個（$\varphi(12) = 4$）。
+    - q: |-
+        暗号で「位数が大きな素数の巡回部分群」を使う理由は？
+      a: |-
+        部分群の位数が小さな素因数に分解できると、離散対数問題を小さな部分群ごとに解いて中国剰余定理で組み立てられる（Pohlig–Hellman 法）。位数が大きな素数ならこの攻撃が効かない。
+
+- id: alg.permutation
+  kind: definition
+  subject: algebra
+  title: 対称群と置換
+  requires: [alg.group]
+  source: Judson AATA, Ch.5
+  statement: |-
+    $\{1, \dots, n\}$ からそれ自身への全単射を**置換**といい、合成を演算とする群を**対称群** $S_n$ という（位数 $n!$）。
+    - 置換は互いに素な**巡回置換**の積にただ1通りに分解できる（例: $(1\,3\,5)(2\,4)$）
+    - 置換の位数は、巡回置換の長さの**最小公倍数**
+    - どの置換も互換（2つを入れ替える置換）の積で書け、その個数の偶奇は書き方によらない（置換の符号）。偶置換全体が交代群 $A_n$
+  questions:
+    - q: |-
+        行列式の定義 $\det A = \sum_{\sigma \in S_n} \operatorname{sgn}(\sigma) \prod_i a_{i\sigma(i)}$ に現れる $\operatorname{sgn}$ は何か？
+      a: |-
+        置換の符号（偶置換なら $+1$、奇置換なら $-1$）。2つの列を入れ替えると行列式の符号が変わるのは、互換を1つ掛けると符号が反転するから。
+
+- id: alg.perm-order
+  kind: problem
+  subject: algebra
+  title: 置換の位数（計算）
+  requires: [alg.permutation]
+  generator: alg.perm-order
+
+- id: alg.homomorphism
+  kind: definition
+  subject: algebra
+  title: 準同型写像と核
+  requires: [alg.subgroup]
+  source: Judson AATA, Ch.9, Ch.11
+  why: |-
+    「構造を保つ写像」を考えると、複雑な群を簡単な群に写して調べられる。暗号の準同型暗号（暗号文のまま計算できる）もこの性質を使う。
+  statement: |-
+    群の写像 $\varphi: G \to H$ が**準同型**であるとは、すべての $a, b \in G$ で $\varphi(ab) = \varphi(a)\varphi(b)$ が成り立つこと。
+    - **核** $\ker\varphi = \{ g : \varphi(g) = e_H \}$、**像** $\operatorname{im}\varphi = \varphi(G)$。どちらも部分群
+    - $\varphi$ が単射 $\iff \ker\varphi = \{e\}$
+    - 全単射な準同型を**同型**といい、$G \cong H$ と書く
+    例: $\det: GL_n(\mathbb{R}) \to \mathbb{R}^\times$、$\exp: (\mathbb{R}, +) \to (\mathbb{R}_{>0}, \times)$、$\mathbb{Z} \to \mathbb{Z}/n\mathbb{Z}$（余りをとる）
+  questions:
+    - q: |-
+        $\det: GL_n(\mathbb{R}) \to \mathbb{R}^\times$ の核は何か？
+      a: |-
+        行列式が $1$ の行列全体 $SL_n(\mathbb{R})$（特殊線形群）。
+    - q: |-
+        RSA で $(m_1 m_2)^e = m_1^e m_2^e$ が成り立つことはどんな性質で、どんな攻撃につながるか？
+      a: |-
+        暗号化が乗法について準同型であること。パディングなしの RSA では、暗号文 $c$ に $r^e$ を掛けたものを復号させると $mr$ が得られ、$r$ で割って平文がわかる（選択暗号文攻撃）。OAEP などのパディングはこの構造を壊すためにある。
+
+- id: alg.normal-quotient
+  kind: definition
+  subject: algebra
+  title: 正規部分群と剰余群
+  requires: [alg.homomorphism, alg.lagrange]
+  source: Judson AATA, Ch.10
+  statement: |-
+    部分群 $N \le G$ が**正規**（$N \trianglelefteq G$）であるとは、すべての $g \in G$ で $gNg^{-1} = N$（同値: $gN = Ng$）が成り立つこと。
+    このとき剰余類全体 $G/N = \{ gN \}$ は $(aN)(bN) = (ab)N$ で群になる（**剰余群**）。$|G/N| = |G|/|N|$。
+    - アーベル群の部分群はすべて正規
+    - 準同型の核は必ず正規部分群
+    例: $\mathbb{Z}/n\mathbb{Z}$ は $\mathbb{Z}$ の正規部分群 $n\mathbb{Z}$ による剰余群。
+  questions:
+    - q: |-
+        $N$ が正規でないと、$(aN)(bN) = (ab)N$ がうまく定義できない理由は？
+      a: |-
+        代表元の取り方によって結果が変わってしまう。$aN = a'N$, $bN = b'N$ でも $abN = a'b'N$ になる保証には、$gN = Ng$ という性質が必要。
+
+- id: alg.first-iso
+  kind: theorem
+  subject: algebra
+  title: 準同型定理（第一同型定理）
+  requires: [alg.normal-quotient]
+  source: Judson AATA, Ch.11
+  statement: |-
+    群の準同型 $\varphi: G \to H$ について、$\ker\varphi$ は $G$ の正規部分群で
+    $$G / \ker\varphi \cong \operatorname{im}\varphi.$$
+    同型は $g\ker\varphi \mapsto \varphi(g)$ で与えられる。
+  proof:
+    - |-
+      $K = \ker\varphi$ とおく。$k \in K$, $g \in G$ なら $\varphi(gkg^{-1}) = \varphi(g)e\varphi(g)^{-1} = e$ なので $gKg^{-1} \subseteq K$。よって $K$ は正規。
+    - |-
+      $\psi: G/K \to \operatorname{im}\varphi$, $\psi(gK) = \varphi(g)$ と定める。$gK = g'K$ なら $g^{-1}g' \in K$ なので $\varphi(g) = \varphi(g')$。よって代表元によらず well-defined。
+    - |-
+      $\psi(gK \cdot g'K) = \psi(gg'K) = \varphi(gg') = \varphi(g)\varphi(g') = \psi(gK)\psi(g'K)$ なので準同型。
+    - |-
+      $\psi(gK) = e$ なら $g \in K$、つまり $gK = K$（単位元）。よって単射。
+    - |-
+      像の任意の元は $\varphi(g) = \psi(gK)$ と書けるので全射。以上より同型。
+  questions:
+    - q: |-
+        この定理を使って $\mathbb{R}^\times / \{\pm 1\} \cong \mathbb{R}_{>0}$ を示せ。
+      a: |-
+        $\varphi(x) = |x|$ は $\mathbb{R}^\times \to \mathbb{R}_{>0}$ の全射準同型で、核は $\{\pm 1\}$。準同型定理より同型。
+    - q: |-
+        有限群の準同型について、$|G| = |\ker\varphi| \cdot |\operatorname{im}\varphi|$ が成り立つ。線形代数のどの定理と対応しているか？
+      a: |-
+        次元定理 $\dim V = \dim\operatorname{null} T + \dim\operatorname{range} T$。線形写像も加法群の準同型で、$V/\operatorname{null}T \cong \operatorname{range}T$ が成り立つ。
+
+- id: alg.ring
+  kind: definition
+  subject: algebra
+  title: 環
+  requires: [alg.group]
+  source: Judson AATA, Ch.16
+  statement: |-
+    **環**とは、集合 $R$ と2つの演算 $+$, $\cdot$ の組で、$(R, +)$ はアーベル群、$\cdot$ は結合的で単位元 $1$ をもち、分配法則 $a(b + c) = ab + ac$, $(a + b)c = ac + bc$ が成り立つもの。$ab = ba$ なら**可換環**。
+    - **単元**: 掛け算の逆元をもつ元。単元全体は群 $R^\times$ をなす
+    - **零因子**: $a \ne 0$ で、ある $b \ne 0$ について $ab = 0$ となる元
+    例: $\mathbb{Z}$, $\mathbb{Z}/n\mathbb{Z}$, 多項式環 $\mathbb{R}[x]$, $n \times n$ 行列環（非可換）
+  questions:
+    - q: |-
+        $\mathbb{Z}/6\mathbb{Z}$ の零因子と単元をすべて挙げよ。
+      a: |-
+        零因子は $2, 3, 4$（$2 \cdot 3 = 0$, $4 \cdot 3 = 0$）。単元は $1, 5$（$6$ と互いに素なもの）。
+    - q: |-
+        零因子があると、方程式 $ax = ay$ から $x = y$ を導けないのはなぜか？
+      a: |-
+        $a(x - y) = 0$ から $x - y = 0$ を結論できない（$a$ が零因子なら $x - y \ne 0$ でも $0$ になりうる）。例: $\mathbb{Z}/6\mathbb{Z}$ で $2 \cdot 1 = 2 \cdot 4$。
+
+- id: alg.ideal
+  kind: definition
+  subject: algebra
+  title: イデアルと剰余環
+  requires: [alg.ring, alg.normal-quotient]
+  source: Judson AATA, Ch.16
+  statement: |-
+    可換環 $R$ の部分集合 $I$ が**イデアル**であるとは、$(I, +)$ が部分群で、すべての $r \in R$, $a \in I$ について $ra \in I$ となること（掛け算で外に出ない）。
+    このとき剰余類全体 $R/I$ は環になる（**剰余環**）。1つの元 $a$ から生成されるイデアル $(a) = aR$ を**単項イデアル**という。
+    例: $\mathbb{Z}$ のイデアルはすべて $n\mathbb{Z}$ の形で、$\mathbb{Z}/n\mathbb{Z}$ はその剰余環。
+  questions:
+    - q: |-
+        群の正規部分群と、環のイデアルの役割はどう対応しているか？
+      a: |-
+        どちらも「それで割った商がうまく定義できる」ための条件。群準同型の核が正規部分群になるように、環準同型の核はイデアルになり、$R/\ker\varphi \cong \operatorname{im}\varphi$ が成り立つ。
+
+- id: alg.bezout
+  kind: theorem
+  subject: algebra
+  title: ベズーの等式
+  requires: [alg.ideal]
+  source: Judson AATA, Ch.2
+  why: |-
+    拡張ユークリッドの互除法で $x, y$ が具体的に求まり、合同式の逆元（RSA の秘密鍵）の計算そのものになる。
+  statement: |-
+    整数 $a, b$（両方は $0$ でない）について、整数 $x, y$ が存在して
+    $$ax + by = \gcd(a, b).$$
+    特に $\gcd(a, n) = 1$ なら $ax \equiv 1 \pmod n$ となる $x$（$a$ の逆元）が存在する。
+  proof:
+    - |-
+      $S = \{ ax + by : x, y \in \mathbb{Z} \}$ を考える。$S$ は正の元を含むので、その最小値 $d = ax_0 + by_0$ をとる。
+    - |-
+      $a$ を $d$ で割って $a = qd + r$（$0 \le r < d$）とすると、$r = a - qd = a(1 - qx_0) + b(-qy_0) \in S$。
+    - |-
+      $d$ の最小性から $r = 0$、つまり $d \mid a$。同様に $d \mid b$。よって $d$ は公約数で $d \le \gcd(a, b)$。
+    - |-
+      一方 $\gcd(a, b)$ は $a, b$ を割るので $d = ax_0 + by_0$ も割り切り、$\gcd(a, b) \le d$。よって $d = \gcd(a, b)$。
+  questions:
+    - q: |-
+        この証明を環の言葉で言い換えよ。
+      a: |-
+        $\mathbb{Z}$ のイデアル $(a, b) = a\mathbb{Z} + b\mathbb{Z}$ は単項イデアル $(d)$ で、$d = \gcd(a, b)$。$\mathbb{Z}$ は単項イデアル整域（PID）である。
+
+- id: alg.crt
+  kind: theorem
+  subject: algebra
+  title: 中国剰余定理
+  requires: [alg.bezout]
+  source: Judson AATA, Ch.16
+  why: |-
+    RSA の復号を $p$ と $q$ で別々に行って組み立てると約4倍速くなる（RSA-CRT）。その実装で計算ミスが起きると、出力から素因数が漏れる（Bellcore 攻撃）。
+  statement: |-
+    $\gcd(m, n) = 1$ ならば、任意の $a, b$ に対して
+    $$x \equiv a \pmod m, \quad x \equiv b \pmod n$$
+    を満たす $x$ が $\bmod mn$ でただ1つ存在する。環の言葉では $\mathbb{Z}/mn\mathbb{Z} \cong \mathbb{Z}/m\mathbb{Z} \times \mathbb{Z}/n\mathbb{Z}$。
+  proof:
+    - |-
+      ベズーの等式より $mu + nv = 1$ となる整数 $u, v$ がある。
+    - |-
+      $x = a \cdot nv + b \cdot mu$ とおく。$nv \equiv 1 \pmod m$, $mu \equiv 0 \pmod m$ なので $x \equiv a \pmod m$。同様に $x \equiv b \pmod n$。よって存在する。
+    - |-
+      $x, x'$ が両方とも解なら $m \mid x - x'$ かつ $n \mid x - x'$。$\gcd(m, n) = 1$ より $mn \mid x - x'$。よって $\bmod mn$ で一意。
+  questions:
+    - q: |-
+        $\gcd(m, n) = 1$ の仮定を外すと何が起こるか？例を挙げよ。
+      a: |-
+        解がないことや、一意でないことがある。$x \equiv 0 \pmod 2$, $x \equiv 1 \pmod 4$ は解なし（$x \equiv 1 \pmod 4$ なら奇数）。また $\mathbb{Z}/4\mathbb{Z} \not\cong \mathbb{Z}/2 \times \mathbb{Z}/2$（前者には位数 $4$ の元がある）。
+
+- id: alg.crt-calc
+  kind: problem
+  subject: algebra
+  title: 連立合同式（計算）
+  requires: [alg.crt]
+  generator: alg.crt
+
+- id: alg.field
+  kind: theorem
+  subject: algebra
+  title: 体と Z/nZ が体になる条件
+  requires: [alg.ring, alg.bezout]
+  source: Judson AATA, Ch.16, Ch.21
+  statement: |-
+    $0 \ne 1$ で、$0$ 以外のすべての元が掛け算の逆元をもつ可換環を**体**という（$\mathbb{Q}, \mathbb{R}, \mathbb{C}$ など）。
+    **定理**: $\mathbb{Z}/n\mathbb{Z}$（$n \ge 2$）が体である $\iff$ $n$ は素数。
+  proof:
+    - |-
+      ($\Leftarrow$) $n = p$ が素数なら、$1 \le a < p$ は $\gcd(a, p) = 1$ を満たす。
+    - |-
+      ベズーの等式より $ax + py = 1$、つまり $ax \equiv 1 \pmod p$。よって $0$ 以外の元はすべて逆元をもち、体。
+    - |-
+      ($\Rightarrow$) $n$ が合成数 $n = ab$（$1 < a, b < n$）なら、$a \cdot b \equiv 0 \pmod n$ で $a$ は零因子。
+    - |-
+      零因子は逆元をもたない（$a^{-1}$ があれば $b = a^{-1}ab = 0$ となり矛盾）。よって体でない。
+  questions:
+    - q: |-
+        暗号で「素数 $p$ を法とする」計算がよく使われる理由を、この定理から説明せよ。
+      a: |-
+        $\mathbb{Z}/p\mathbb{Z}$ は体なので、$0$ 以外では割り算がいつでもでき、多項式の根が次数個以下などの「体の性質」が使える。楕円曲線暗号や秘密分散（シャミア）はこれを前提にしている。
+
+- id: alg.poly-ring
+  kind: definition
+  subject: algebra
+  title: 多項式環と剰余の定理
+  requires: [alg.field]
+  source: Judson AATA, Ch.17
+  statement: |-
+    体 $F$ 上の多項式全体 $F[x]$ は環で、整数と同じように**割り算**ができる: $g \ne 0$ に対し $f = qg + r$（$\deg r < \deg g$）となる $q, r$ がただ1つある。
+    - $f(a) = 0 \iff (x - a) \mid f$（因数定理）
+    - 次数 $d$ の $0$ でない多項式の根は、体の中で**高々 $d$ 個**
+    - 既約多項式（定数でない多項式の積に分解できないもの）は、整数での素数に当たる
+  questions:
+    - q: |-
+        「次数 $d$ の多項式の根は高々 $d$ 個」が体でない環で成り立たない例を挙げよ。
+      a: |-
+        $\mathbb{Z}/8\mathbb{Z}$ で $x^2 - 1$ は $x = 1, 3, 5, 7$ の4個の根をもつ。零因子があると $(x - a)(x - b) = 0$ から $x = a$ または $x = b$ を導けない。
+    - q: |-
+        シャミアの秘密分散で、$k$ 個の点から次数 $k - 1$ の多項式が一意に決まるのはなぜか？
+      a: |-
+        同じ $k$ 点を通る次数 $k - 1$ 以下の多項式が2つあれば、その差は次数 $k - 1$ 以下で $k$ 個の根をもつので $0$。体の上で考えているから成り立つ。
+
+- id: alg.sqrt-mod
+  kind: problem
+  subject: algebra
+  title: 合同式の平方根（計算）
+  requires: [alg.poly-ring]
+  generator: alg.sqrt-mod
+
+- id: alg.finite-field
+  kind: definition
+  subject: algebra
+  title: 有限体
+  requires: [alg.poly-ring, alg.cyclic]
+  source: Judson AATA, Ch.22
+  why: |-
+    AES、リード・ソロモン符号（QR コード・CD）、楕円曲線暗号、CRC はすべて有限体の上の計算。ビット演算で効率よく実装できる。
+  statement: |-
+    - 有限体の位数は素数べき $p^n$ で、各 $p^n$ に対し同型を除いてただ1つ存在する（$\mathbb{F}_{p^n}$ または $GF(p^n)$ と書く）
+    - $\mathbb{F}_{p^n} \cong \mathbb{F}_p[x] / (f)$（$f$ は次数 $n$ の既約多項式）。元は次数 $n$ 未満の多項式で、掛け算は $f$ で割った余り
+    - 乗法群 $\mathbb{F}_{p^n}^\times$ は位数 $p^n - 1$ の**巡回群**
+    例: AES は $\mathbb{F}_{2^8} = \mathbb{F}_2[x]/(x^8 + x^4 + x^3 + x + 1)$ を使う。1バイトが1つの元で、足し算は XOR。
+  questions:
+    - q: |-
+        $\mathbb{F}_4$ と $\mathbb{Z}/4\mathbb{Z}$ は同じか？
+      a: |-
+        ちがう。$\mathbb{Z}/4\mathbb{Z}$ は $2 \cdot 2 = 0$ で体でない。$\mathbb{F}_4 = \mathbb{F}_2[x]/(x^2 + x + 1)$ は元 $0, 1, x, x + 1$ からなる体で、標数は $2$（$1 + 1 = 0$）。
+
+- id: alg.dlog
+  kind: definition
+  subject: algebra
+  title: 離散対数問題と Diffie–Hellman 鍵共有
+  requires: [alg.cyclic, alg.fermat]
+  source: Judson AATA, Ch.7
+  why: |-
+    TLS などで使われる鍵共有の安全性の根拠。どの群のどんな部分群を使うかを間違えると、安全性が大きく下がる。
+  statement: |-
+    巡回群 $G = \langle g \rangle$（位数 $q$）で、$h = g^x$ から $x$ を求める問題を**離散対数問題**という。$g^x$ の計算は繰り返し二乗法で速いが、逆は（適切な群では）効率的な方法が知られていない。
+    **Diffie–Hellman 鍵共有**: Alice は秘密の $a$ を選んで $g^a$ を、Bob は秘密の $b$ を選んで $g^b$ を公開する。双方が $(g^b)^a = (g^a)^b = g^{ab}$ を共有鍵にする。盗聴者は $g^a, g^b$ から $g^{ab}$ を計算できないと考えられている。
+  questions:
+    - q: |-
+        Diffie–Hellman を認証なしで使うと、どんな攻撃が可能か？
+      a: |-
+        中間者攻撃。攻撃者が間に入り、Alice とも Bob とも別々に鍵共有すれば、すべての通信を読み書きできる。公開値に署名するなどの認証が必要。
+    - q: |-
+        量子コンピュータは離散対数問題にどう影響するか？
+      a: |-
+        ショアのアルゴリズムで離散対数も素因数分解も多項式時間で解ける。そのため格子暗号などの耐量子暗号への移行が進んでいる。

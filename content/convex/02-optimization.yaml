@@ -1,0 +1,285 @@
+# 凸解析・最適化 2: 凸性の判定・双対性・KKT・アルゴリズムの収束
+# 出典の章番号は Boyd & Vandenberghe, Convex Optimization（著者が無料公開）
+
+- id: cvx.convex-ops
+  kind: definition
+  subject: convex
+  title: 凸性を保つ操作
+  requires: [cvx.convex-function]
+  source: Boyd & Vandenberghe, Ch.3.2
+  why: |-
+    実際の問題では定義から凸性を確かめるのは大変。凸と分かっている部品をこれらの操作で組み立てて凸性を示すのが実践的な方法（CVXPY などはこの規則で自動判定する）。
+  statement: |-
+    $f, g$ が凸なら、次も凸:
+    1. 非負の重み付き和 $\alpha f + \beta g$（$\alpha, \beta \ge 0$）
+    2. アフィン写像との合成 $f(Ax + b)$
+    3. 各点ごとの最大 $\max\{f(x), g(x)\}$（一般に、凸関数の族の上限）
+    4. $h$ が凸で非減少、$f$ が凸なら $h(f(x))$
+
+    代表的な凸関数: ノルム $\|x\|$、$\max_i x_i$、$\log\sum_i e^{x_i}$（log-sum-exp）、$x^\top P x$（$P \succeq 0$）、$-\log x$。
+  questions:
+    - q: |-
+        $f(x) = \|Ax - b\|_2 + \lambda\|x\|_1$（$\lambda \ge 0$）が凸であることを示せ。
+      a: |-
+        $\|\cdot\|_2$ はノルムなので凸、それとアフィン写像 $Ax - b$ の合成は凸。$\|x\|_1$ も凸で、非負の重み $\lambda$ を掛けて足しても凸（LASSO の目的関数）。
+    - q: |-
+        2つの凸関数の積や、最小 $\min\{f, g\}$ は凸か？
+      a: |-
+        一般に凸でない。$\min\{x^2, (x - 2)^2\}$ は谷が2つあり凸でない。$x \cdot x^2 = x^3$ も凸でない。
+
+- id: cvx.jensen
+  kind: theorem
+  subject: convex
+  title: イェンセンの不等式
+  requires: [cvx.first-order, prob.expectation]
+  source: Boyd & Vandenberghe, Ch.3.1.8
+  why: |-
+    情報理論（KL ダイバージェンスが非負）、EM アルゴリズム、機械学習の変分推論、相加相乗平均など、多くの不等式の源。
+  statement: |-
+    $f$ が凸関数で、確率変数 $X$ と $f(X)$ の期待値が存在するとき
+    $$f(E[X]) \le E[f(X)].$$
+    $f$ が凹なら不等号は逆になる。
+  proof:
+    - |-
+      $\mu = E[X]$ とおく。（微分可能な場合）凸関数の1次条件より、すべての $x$ で $f(x) \ge f(\mu) + \nabla f(\mu)^\top (x - \mu)$。
+    - |-
+      $x = X$ を代入して両辺の期待値をとる: $E[f(X)] \ge f(\mu) + \nabla f(\mu)^\top (E[X] - \mu)$。
+    - |-
+      $E[X] - \mu = 0$ なので $E[f(X)] \ge f(\mu) = f(E[X])$。
+  questions:
+    - q: |-
+        イェンセンの不等式から相加相乗平均の不等式 $\sqrt{ab} \le (a + b)/2$（$a, b > 0$）を導け。
+      a: |-
+        $\log$ は凹。$X$ が $a, b$ を確率 $1/2$ ずつとるとすると $\log E[X] \ge E[\log X]$、つまり $\log\frac{a + b}{2} \ge \frac{\log a + \log b}{2} = \log\sqrt{ab}$。
+    - q: |-
+        $E[X^2] \ge (E[X])^2$ はこの不等式のどんな特別な場合か？
+      a: |-
+        $f(x) = x^2$（凸）の場合。差 $E[X^2] - (E[X])^2$ は分散で、非負であることと同じ。
+
+- id: cvx.lagrange
+  kind: theorem
+  subject: convex
+  title: ラグランジュの未定乗数法
+  requires: [cvx.first-order, la.rank-nullity]
+  source: Boyd & Vandenberghe, Ch.5.1
+  statement: |-
+    $f, h_1, \dots, h_p$ が微分可能で、$x^*$ が $h_j(x) = 0$（$j = 1, \dots, p$）のもとでの $f$ の局所最小点、かつ $\nabla h_1(x^*), \dots, \nabla h_p(x^*)$ が1次独立ならば、
+    $$\nabla f(x^*) + \sum_{j=1}^p \nu_j \nabla h_j(x^*) = 0$$
+    を満たす $\nu_1, \dots, \nu_p$（ラグランジュ乗数）が存在する。
+    幾何的には「制約面に沿ったどの方向に動いても $f$ が1次では変化しない」= 勾配が制約面に垂直。
+  questions:
+    - q: |-
+        ラグランジュ乗数 $\nu_j$ には何という意味があるか？
+      a: |-
+        制約の右辺を少し動かしたときの最適値の変化率（感度・シャドープライス）。$h_j(x) = \varepsilon$ にすると最適値はおよそ $-\nu_j \varepsilon$ 変わる（符号は $L$ の定め方による）。
+    - q: |-
+        この条件は最小点であるための十分条件か？
+      a: |-
+        一般には必要条件にすぎない（最大点や鞍点でも満たされる）。目的関数が凸で制約がアフィンなら十分条件にもなる。
+
+- id: cvx.lagrange-eq
+  kind: problem
+  subject: convex
+  title: 等式制約付き最小化（計算）
+  requires: [cvx.lagrange]
+  generator: cvx.lagrange-eq
+
+- id: cvx.kkt
+  kind: theorem
+  subject: convex
+  title: KKT 条件
+  requires: [cvx.lagrange, cvx.weak-duality]
+  source: Boyd & Vandenberghe, Ch.5.5
+  why: |-
+    不等式制約付き最適化の最適性条件。サポートベクターマシン、制御の最適化、資源配分の問題で、解の形を導くのに使う。
+  statement: |-
+    問題 $\min f_0(x)$ s.t. $f_i(x) \le 0$, $h_j(x) = 0$ について、次を **KKT 条件**という:
+    1. 主実行可能性: $f_i(x^*) \le 0$, $h_j(x^*) = 0$
+    2. 双対実行可能性: $\lambda_i^* \ge 0$
+    3. **相補性**: $\lambda_i^* f_i(x^*) = 0$
+    4. 停留性: $\nabla f_0(x^*) + \sum_i \lambda_i^* \nabla f_i(x^*) + \sum_j \nu_j^* \nabla h_j(x^*) = 0$
+
+    凸問題（$f_0, f_i$ が凸、$h_j$ がアフィン）でスレーター条件が成り立てば、KKT 条件は最適性の**必要十分条件**。
+  questions:
+    - q: |-
+        相補性 $\lambda_i f_i(x^*) = 0$ は何を意味するか？
+      a: |-
+        各制約について「効いていない（$f_i < 0$）なら乗数は $0$」か「乗数が正なら制約はぴったり効いている（$f_i = 0$）」のどちらか。SVM では乗数が正の点だけがサポートベクトルになる。
+
+- id: cvx.strong-duality
+  kind: theorem
+  subject: convex
+  title: 強双対性とスレーター条件
+  requires: [cvx.kkt]
+  source: Boyd & Vandenberghe, Ch.5.2–5.3
+  statement: |-
+    凸問題 $\min f_0(x)$ s.t. $f_i(x) \le 0$, $Ax = b$ において、**スレーター条件**（すべての $f_i(x) < 0$ を厳密に満たし $Ax = b$ を満たす点が存在する）が成り立てば、
+    $$d^* = \max_{\lambda \ge 0, \nu} g(\lambda, \nu) = p^*$$
+    （双対ギャップが $0$）。弱双対性 $d^* \le p^*$ は常に成り立つが、等号には条件が要る。
+  questions:
+    - q: |-
+        強双対性がアルゴリズムで役に立つ理由は？
+      a: |-
+        実行可能解 $x$ と双対実行可能解 $(\lambda, \nu)$ があれば、$f_0(x) - g(\lambda, \nu)$ が最適値までの誤差の上界になる（双対ギャップ）。これを停止条件にでき、「最適から $\varepsilon$ 以内」と証明付きで言える。
+    - q: |-
+        凸でない問題では強双対性はどうなるか？
+      a: |-
+        一般に成り立たず、$d^* < p^*$ となりうる。それでも双対問題は凸なので解きやすく、$d^*$ は元の問題の下界として分枝限定法などに使われる。
+
+- id: cvx.lp
+  kind: definition
+  subject: convex
+  title: 線形計画法
+  requires: [cvx.convex-set]
+  source: Boyd & Vandenberghe, Ch.4.3
+  statement: |-
+    目的関数も制約も線形（アフィン）な最適化問題:
+    $$\min\ c^\top x \quad \text{s.t.}\ Ax \le b,\ x \ge 0.$$
+    実行可能領域は凸多面体で、最適値が有限ならある**頂点**で最適値がとられる。
+    - **単体法**: 頂点から隣の頂点へ、目的関数が良くなる方向にたどる。実用上は速い
+    - **内点法**: 領域の内部から近づく。最悪でも多項式時間
+    LP の双対問題もまた LP で、条件が整えば強双対性が成り立つ。
+  questions:
+    - q: |-
+        変数が整数に限られる問題（整数計画）は LP より難しいのはなぜか？
+      a: |-
+        実行可能領域が凸でなく（格子点の集合）、頂点で最適という性質も使えない。一般に NP 困難。LP 緩和（整数制約を外した LP）の値を下界にして分枝限定法で解く。
+
+- id: cvx.lp-2d
+  kind: problem
+  subject: convex
+  title: 2変数の線形計画（計算）
+  requires: [cvx.lp]
+  generator: cvx.lp-2d
+
+- id: cvx.smooth
+  kind: definition
+  subject: convex
+  title: L-平滑性と降下補題
+  requires: [cvx.first-order, la.cauchy-schwarz]
+  source: Boyd & Vandenberghe, Ch.9.1
+  statement: |-
+    微分可能な $f$ が **$L$-平滑**であるとは、勾配がリプシッツ連続 $\|\nabla f(x) - \nabla f(y)\| \le L\|x - y\|$ であること（2回微分可能なら $\nabla^2 f \preceq LI$）。
+    **降下補題**: $L$-平滑なら
+    $$f(y) \le f(x) + \nabla f(x)^\top(y - x) + \frac{L}{2}\|y - x\|^2.$$
+    特に $y = x - \frac{1}{L}\nabla f(x)$ とすると $f(y) \le f(x) - \frac{1}{2L}\|\nabla f(x)\|^2$（1ステップで必ず減る量）。
+  questions:
+    - q: |-
+        2次関数 $f(x) = \frac12 x^\top A x$（$A$ 対称）の $L$ は何か？
+      a: |-
+        $A$ の固有値の絶対値の最大値（$A \succeq 0$ なら最大固有値）。$\nabla f(x) = Ax$ で、$\|Ax - Ay\| \le \lambda_{\max}\|x - y\|$。
+
+- id: cvx.gd-convergence
+  kind: theorem
+  subject: convex
+  title: 勾配降下法の収束レート
+  requires: [cvx.smooth]
+  source: Boyd & Vandenberghe, Ch.9.3
+  why: |-
+    「何回反復すれば誤差が $\varepsilon$ 以下になるか」を保証する。学習率の選び方や、なぜ問題によって収束が遅いのかの説明の土台。
+  statement: |-
+    $f$ が凸で $L$-平滑、最小点 $x^*$ をもつとき、ステップ幅 $\eta = 1/L$ の勾配降下法 $x_{k+1} = x_k - \frac{1}{L}\nabla f(x_k)$ は
+    $$f(x_k) - f(x^*) \le \frac{L\|x_0 - x^*\|^2}{2k}.$$
+    つまり誤差 $\varepsilon$ には $O(1/\varepsilon)$ 回の反復で十分。
+  proof:
+    - |-
+      降下補題より $f(x_{k+1}) \le f(x_k) - \frac{1}{2L}\|\nabla f(x_k)\|^2$。特に $f(x_k)$ は単調減少。
+    - |-
+      凸性（1次条件）より $f(x_k) \le f(x^*) + \nabla f(x_k)^\top(x_k - x^*)$。
+    - |-
+      2つを合わせ、$x_{k+1} - x^* = x_k - x^* - \frac1L\nabla f(x_k)$ を展開すると $f(x_{k+1}) - f(x^*) \le \frac{L}{2}\left(\|x_k - x^*\|^2 - \|x_{k+1} - x^*\|^2\right)$。
+    - |-
+      $k = 0, \dots, K-1$ で足すと右辺は打ち消し合い（望遠鏡和）、$\sum_{k=1}^{K}(f(x_k) - f(x^*)) \le \frac{L}{2}\|x_0 - x^*\|^2$。
+    - |-
+      $f(x_k)$ は単調減少なので、左辺は $K(f(x_K) - f(x^*))$ 以上。$K$ で割って結論を得る。
+  questions:
+    - q: |-
+        さらに $f$ が $\mu$-強凸なら、収束はどう速くなるか？
+      a: |-
+        線形収束（指数的）: $f(x_k) - f^* \le (1 - \mu/L)^k (f(x_0) - f^*)$。条件数 $\kappa = L/\mu$ が大きい（谷が細長い）ほど遅い。
+    - q: |-
+        ステップ幅を $2/L$ より大きくすると何が起こりうるか？
+      a: |-
+        発散しうる。$f(x) = \frac{L}{2}x^2$ なら $x_{k+1} = (1 - \eta L)x_k$ で、$|1 - \eta L| > 1$ になり振動しながら大きくなる。
+
+- id: cvx.strong-convexity
+  kind: definition
+  subject: convex
+  title: 強凸性と条件数
+  requires: [cvx.smooth]
+  source: Boyd & Vandenberghe, Ch.9.1
+  statement: |-
+    $f$ が **$\mu$-強凸**（$\mu > 0$）であるとは、$f(x) - \frac{\mu}{2}\|x\|^2$ が凸であること。2回微分可能なら $\nabla^2 f \succeq \mu I$。
+    強凸関数は最小点をただ1つもち、$f(x) - f^* \ge \frac{\mu}{2}\|x - x^*\|^2$（関数値が小さければ点も近い）。
+    $L$-平滑かつ $\mu$-強凸のとき、**条件数** $\kappa = L/\mu$ が勾配法の難しさを決める。
+  questions:
+    - q: |-
+        リッジ回帰 $\|Xw - y\|^2 + \lambda\|w\|^2$ が常に解を一つだけもつ理由を強凸性で説明せよ。
+      a: |-
+        $\lambda\|w\|^2$ の項でヘッセ行列が $2(X^\top X + \lambda I) \succeq 2\lambda I$ となり、$2\lambda$-強凸になる。強凸関数の最小点は一意。多重共線性があっても解が定まる。
+
+- id: cvx.newton
+  kind: definition
+  subject: convex
+  title: ニュートン法
+  requires: [cvx.strong-convexity]
+  source: Boyd & Vandenberghe, Ch.9.5
+  statement: |-
+    各点で2次近似 $f(x) + \nabla f(x)^\top d + \frac12 d^\top \nabla^2 f(x) d$ を最小にする方向に進む:
+    $$x_{k+1} = x_k - \left[\nabla^2 f(x_k)\right]^{-1}\nabla f(x_k).$$
+    - 最適解の近くでは**2次収束**（正しい桁数が毎回ほぼ倍になる）
+    - 1回の反復で $n \times n$ の連立方程式を解く（$O(n^3)$）。変数が多いと重い
+    - 遠くからは発散しうるので、直線探索（ステップ幅を減らす）と組み合わせる
+    - アフィン変換で問題を変形しても挙動が変わらない（条件数の影響を受けにくい）
+  questions:
+    - q: |-
+        変数が数百万あるニューラルネットの学習でニュートン法がそのまま使われない理由は？
+      a: |-
+        ヘッセ行列が $n^2$ 個の要素をもち、保存も逆行列の計算もできない。準ニュートン法（L-BFGS）や、勾配のみの手法（Adam など）が使われる。
+
+- id: cvx.newton-1d
+  kind: problem
+  subject: convex
+  title: ニュートン法の1ステップ（計算）
+  requires: [cvx.newton]
+  generator: cvx.newton-1d
+
+- id: cvx.projected-gd
+  kind: definition
+  subject: convex
+  title: 射影と射影勾配法
+  requires: [cvx.convex-set, cvx.smooth]
+  source: Boyd & Vandenberghe, Ch.8.1
+  statement: |-
+    閉凸集合 $C$ への**射影** $P_C(x) = \arg\min_{z \in C}\|z - x\|$ はただ1つに定まり、次で特徴づけられる:
+    $$(x - P_C(x))^\top(z - P_C(x)) \le 0 \quad (\forall z \in C).$$
+    射影は距離を縮める（$\|P_C(x) - P_C(y)\| \le \|x - y\|$）。
+    **射影勾配法**: $x_{k+1} = P_C(x_k - \eta\nabla f(x_k))$。制約が「射影しやすい集合」（箱・球・半空間・単体）なら、制約なしの勾配法とほぼ同じ手間で解ける。
+  questions:
+    - q: |-
+        箱 $\{x : l \le x \le u\}$ への射影はどう計算するか？
+      a: |-
+        成分ごとに $\min(\max(x_i, l_i), u_i)$（はみ出した成分を切り詰める）。
+
+- id: cvx.project-halfspace
+  kind: problem
+  subject: convex
+  title: 半空間への射影（計算）
+  requires: [cvx.projected-gd]
+  generator: cvx.project-halfspace
+
+- id: cvx.sgd
+  kind: definition
+  subject: convex
+  title: 確率的勾配降下法（SGD）
+  requires: [cvx.gd-convergence, prob.linearity]
+  source: Boyd & Vandenberghe（関連 Ch.9）, 機械学習の標準的な手法
+  statement: |-
+    目的関数がデータの平均 $f(x) = \frac1N\sum_{i=1}^N f_i(x)$ のとき、毎回ランダムに選んだ $i$（または少数のミニバッチ）の勾配 $\nabla f_i(x)$ で更新する:
+    $$x_{k+1} = x_k - \eta_k \nabla f_{i_k}(x_k).$$
+    $E[\nabla f_{i_k}(x)] = \nabla f(x)$（不偏）なので平均的には正しい方向に進むが、ノイズがあるため、収束させるにはステップ幅を徐々に小さくする（例: $\eta_k \propto 1/\sqrt{k}$）。1回の更新が $N$ に依存しないので大規模データで有利。
+  questions:
+    - q: |-
+        ミニバッチの大きさを $B$ 倍にすると、勾配のばらつき（分散）はどうなるか？
+      a: |-
+        独立に選ぶなら平均の分散は $1/B$ 倍（標準偏差は $1/\sqrt{B}$ 倍）。ただし計算量は $B$ 倍なので、大きくしすぎると効率が落ちる。
