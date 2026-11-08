@@ -11,6 +11,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
+        // アプリの識別子を明示する（start_url から推測させない）。
+        // 一度アンインストールした後に Chrome が古いインストール記録と取り違えるのを避ける
+        id: 'math-dojo',
         name: '数理道場',
         short_name: '数理道場',
         description: '確率・統計・線形代数・代数・最適化と C++/Rust を毎日5分で',
