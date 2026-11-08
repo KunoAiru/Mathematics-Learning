@@ -4,6 +4,7 @@ import { getItem } from './content';
 import type { Step } from './store/daily';
 import { loadState, requestPersist, saveState } from './store/persist';
 import type { AppState } from './store/state';
+import { Drill } from './views/Drill';
 import { ItemDetail } from './views/ItemDetail';
 import { MapView } from './views/MapView';
 import { Notes } from './views/Notes';
@@ -11,11 +12,12 @@ import { Session } from './views/Session';
 import { Settings } from './views/Settings';
 import { Today } from './views/Today';
 
-type Tab = 'today' | 'map' | 'notes' | 'settings';
+type Tab = 'today' | 'map' | 'drill' | 'notes' | 'settings';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'today', label: '今日', icon: '◉' },
   { id: 'map', label: 'マップ', icon: '◇' },
+  { id: 'drill', label: 'ドリル', icon: '∑' },
   { id: 'notes', label: 'ノート', icon: '✎' },
   { id: 'settings', label: '設定', icon: '⚙' },
 ];
@@ -78,6 +80,7 @@ export default function App() {
           <main>
             {tab === 'today' && <Today state={state} start={start} />}
             {tab === 'map' && <MapView state={state} openItem={openItem} />}
+            {tab === 'drill' && <Drill state={state} start={start} />}
             {tab === 'notes' && <Notes openMemo={openMemo} version={memoVersion} />}
             {tab === 'settings' && <Settings state={state} update={update} replace={replace} />}
           </main>

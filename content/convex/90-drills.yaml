@@ -1,0 +1,29 @@
+# convex: 計算ドリル（毎回数値が変わる問題。答えは src/generators で別解により検算済み）
+
+- id: cvx.convexity-check
+  kind: problem
+  subject: convex
+  title: 2次関数の凸性の判定（計算）
+  requires: [cvx.convex-function]
+  generator: cvx.convexity-check
+
+- id: cvx.kkt-1d
+  kind: problem
+  subject: convex
+  title: 1変数の KKT 条件（計算）
+  requires: [cvx.kkt]
+  generator: cvx.kkt-1d
+
+- id: cvx.condition-number
+  kind: problem
+  subject: convex
+  title: L・μ・条件数（計算）
+  requires: [cvx.strong-convexity]
+  generator: cvx.condition-number
+
+- id: cvx.gd-iterates
+  kind: problem
+  subject: convex
+  title: 勾配降下法の反復（計算）
+  requires: [cvx.gd-convergence]
+  generator: cvx.gd-iterates

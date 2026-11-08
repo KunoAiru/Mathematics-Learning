@@ -43,6 +43,17 @@ export function Session({ initial, daily, state, update, onExit, openMemo, openR
   const grade = (cardId: string, g: Grade) => {
     const now = new Date();
     const itemId = CARD_BY_ID.get(cardId)!.itemId;
+    if (step?.kind === 'card' && step.label === 'ドリル') {
+      const ok = g !== Rating.Again;
+      update((s) => {
+        const prev = s.drill?.[itemId] ?? { n: 0, ok: 0 };
+        // ドリルは今日のセットとは別扱い（activity に数えない）
+        return { ...s, drill: { ...s.drill, [itemId]: { n: prev.n + 1, ok: prev.ok + (ok ? 1 : 0) } } };
+      });
+      setStats((st) => ({ answered: st.answered + 1, ok: st.ok + (ok ? 1 : 0) }));
+      setI(i + 1);
+      return;
+    }
     update((s) => ({
       ...s,
       cards: { ...s.cards, [cardId]: review(s.cards[cardId], g, now) },
@@ -76,7 +87,7 @@ export function Session({ initial, daily, state, update, onExit, openMemo, openR
           <div className="flame">🔥</div>
           <div className="big">{st.days} 日連続</div>
           <p>
-            {daily ? '今日のセット完了！' : 'おつかれさま！'} {stats.answered} 枚に回答（{stats.ok} 枚できた）
+            {daily ? '今日のセット完了！' : 'おつかれさま！'} {stats.answered} 問に回答（{stats.ok} 問できた）
           </p>
         </div>
         <p className="muted">
@@ -135,7 +146,13 @@ export function Session({ initial, daily, state, update, onExit, openMemo, openR
           </button>
         </div>
       ) : (
-        <CardView key={`${i}-${step.cardId}`} cardId={step.cardId} stored={state.cards[step.cardId]} onGrade={(g) => grade(step.cardId, g)} />
+        <CardView
+          key={`${i}-${step.cardId}`}
+          cardId={step.cardId}
+          stored={state.cards[step.cardId]}
+          practice={step.label === 'ドリル'}
+          onGrade={(g) => grade(step.cardId, g)}
+        />
       )}
     </div>
   );

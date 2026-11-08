@@ -1,0 +1,36 @@
+# linear-algebra: 計算ドリル（毎回数値が変わる問題。答えは src/generators で別解により検算済み）
+
+- id: la.solve-system
+  kind: problem
+  subject: linear-algebra
+  title: 3元連立1次方程式（計算）
+  requires: [la.det-invertible]
+  generator: la.solve-system
+
+- id: la.projection
+  kind: problem
+  subject: linear-algebra
+  title: ベクトルの正射影（計算）
+  requires: [la.cauchy-schwarz]
+  generator: la.projection
+
+- id: la.matrix-power
+  kind: problem
+  subject: linear-algebra
+  title: 対角化による行列のべき乗（計算）
+  requires: [la.eigen-independent]
+  generator: la.matrix-power
+
+- id: la.nullity
+  kind: problem
+  subject: linear-algebra
+  title: 核の次元（計算）
+  requires: [la.rank-nullity]
+  generator: la.nullity
+
+- id: la.cos-angle
+  kind: problem
+  subject: linear-algebra
+  title: 2つのベクトルのなす角（計算）
+  requires: [la.cauchy-schwarz]
+  generator: la.cos-angle

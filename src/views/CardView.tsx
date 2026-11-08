@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { createContext, useContext, useMemo, useState } from 'react';
 import { Rating, type Grade } from 'ts-fsrs';
 import { AnswerInput } from '../components/AnswerInput';
 import { CodeBlock } from '../components/CodeBlock';
@@ -15,12 +15,18 @@ interface Props {
   cardId: string;
   stored: StoredCard | undefined;
   onGrade: (g: Grade) => void;
+  /** 練習モード（ドリル）: 復習の評価ボタンを出さず「次へ」だけにする */
+  practice?: boolean;
 }
 
-export function CardView({ cardId, stored, onGrade }: Props) {
+/** 練習モードかどうか（自動採点の結果を Good / Again として返す） */
+const PracticeContext = createContext(false);
+
+export function CardView({ cardId, stored, onGrade, practice = false }: Props) {
   const def = CARD_BY_ID.get(cardId)!;
   const item = getItem(def.itemId);
   return (
+    <PracticeContext.Provider value={practice}>
     <div className="card">
       <div className="card-head">
         <KindBadge item={item} />
@@ -30,6 +36,7 @@ export function CardView({ cardId, stored, onGrade }: Props) {
       </div>
       <Body def={def} item={item} stored={stored} onGrade={onGrade} />
     </div>
+    </PracticeContext.Provider>
   );
 }
 
@@ -180,6 +187,7 @@ function Checked({
   onGrade: (g: Grade) => void;
   before?: React.ReactNode;
 }) {
+  const practice = useContext(PracticeContext);
   const [result, setResult] = useState<null | boolean>(null);
   const [gaveUp, setGaveUp] = useState(false);
   const [selfShown, setSelfShown] = useState(false);
@@ -239,7 +247,18 @@ function Checked({
             </div>
           )}
           {solution && <Md src={solution} className="solution" />}
-          {result === true ? (
+          {practice ? (
+            <div className="row">
+              <button className="primary wide" onClick={() => onGrade(result === true ? Rating.Good : Rating.Again)}>
+                次の問題へ
+              </button>
+              {result === false && (
+                <button className="ghost" onClick={() => onGrade(Rating.Good)}>
+                  入力ミスだった
+                </button>
+              )}
+            </div>
+          ) : result === true ? (
             <GradeButtons card={stored} onGrade={onGrade} only={CORRECT_GRADES} />
           ) : (
             <div className="row">

@@ -1,0 +1,22 @@
+# statistics: 計算ドリル（毎回数値が変わる問題。答えは src/generators で別解により検算済み）
+
+- id: stat.mean-var
+  kind: problem
+  subject: statistics
+  title: 標本平均と不偏分散（計算）
+  requires: [stat.sample-variance]
+  generator: stat.mean-var
+
+- id: stat.sample-size
+  kind: problem
+  subject: statistics
+  title: 必要な標本の大きさ（計算）
+  requires: [stat.confidence-interval]
+  generator: stat.sample-size
+
+- id: stat.t-stat
+  kind: problem
+  subject: statistics
+  title: t 統計量（計算）
+  requires: [stat.t-test]
+  generator: stat.t-stat

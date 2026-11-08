@@ -1166,3 +1166,29 @@ input[type='range'] {
 .modal textarea {
   margin: 8px 0 12px;
 }
+
+/* ドリル */
+.drill-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+
+.drill-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px dashed var(--line);
+  padding: 10px 2px;
+}
+
+.drill-title {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.4;
+}

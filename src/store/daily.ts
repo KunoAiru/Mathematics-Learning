@@ -4,7 +4,7 @@ import { dayKey, isDue, isMastered, type AppState } from './state';
 
 export type Step =
   | { kind: 'learn'; itemId: string }
-  | { kind: 'card'; cardId: string; label: '復習' | '新規' | '今日の1問' | '再挑戦' };
+  | { kind: 'card'; cardId: string; label: '復習' | '新規' | '今日の1問' | '再挑戦' | 'ドリル' };
 
 const enabled = (s: AppState, it: Item) => s.settings.subjects.includes(it.subject);
 

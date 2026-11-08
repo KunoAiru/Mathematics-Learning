@@ -17,6 +17,7 @@ import {
   Rng,
 } from './util';
 import { MORE_GENERATORS } from './more';
+import { DRILL_GENERATORS } from './drill';
 
 export { Rng } from './util';
 export type { GeneratedProblem, Generator } from './util';
@@ -533,7 +534,7 @@ const gdStep: Generator = {
 };
 
 export const GENERATORS: Record<string, Generator> = Object.fromEntries(
-  [matmul, det3, inverse2, eigen2, rank34, binomial, bayes, birthday, ballsEmpty, zInterval, modpow, elementOrder, inverseMod, gradient, gdStep, ...MORE_GENERATORS].map(
+  [matmul, det3, inverse2, eigen2, rank34, binomial, bayes, birthday, ballsEmpty, zInterval, modpow, elementOrder, inverseMod, gradient, gdStep, ...MORE_GENERATORS, ...DRILL_GENERATORS].map(
     (g) => [g.id, g],
   ),
 );

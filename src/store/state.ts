@@ -32,6 +32,8 @@ export interface AppState {
   /** 日付(YYYY-MM-DD) → その日の「今日のセット」を最後までやり終えた */
   completed: Record<string, boolean>;
   reports: Report[];
+  /** 計算ドリルの成績（項目 id → 解いた数・正解数）。復習スケジュールとは別 */
+  drill: Record<string, { n: number; ok: number }>;
   settings: Settings;
 }
 
@@ -42,6 +44,7 @@ export const defaultState = (): AppState => ({
   activity: {},
   completed: {},
   reports: [],
+  drill: {},
   settings: {
     subjects: ['linear-algebra', 'probability', 'statistics', 'algebra', 'convex', 'cpp', 'rust'],
     reviewCap: 20,

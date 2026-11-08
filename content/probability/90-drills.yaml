@@ -1,0 +1,43 @@
+# probability: 計算ドリル（毎回数値が変わる問題。答えは src/generators で別解により検算済み）
+
+- id: prob.mean-var
+  kind: problem
+  subject: probability
+  title: 離散分布の期待値と分散（計算）
+  requires: [prob.variance]
+  generator: prob.mean-var
+
+- id: prob.geometric
+  kind: problem
+  subject: probability
+  title: 幾何分布（計算）
+  requires: [prob.conditional, prob.expectation]
+  generator: prob.geometric
+
+- id: prob.hypergeom
+  kind: problem
+  subject: probability
+  title: 玉の取り出し・超幾何分布（計算）
+  requires: [prob.space]
+  generator: prob.hypergeom
+
+- id: prob.poisson
+  kind: problem
+  subject: probability
+  title: ポアソン分布（計算）
+  requires: [prob.expectation]
+  generator: prob.poisson
+
+- id: prob.normal
+  kind: problem
+  subject: probability
+  title: 正規分布の確率（計算）
+  requires: [prob.clt]
+  generator: prob.normal
+
+- id: prob.markov2
+  kind: problem
+  subject: probability
+  title: マルコフ連鎖の定常分布（計算）
+  requires: [prob.conditional]
+  generator: prob.markov2

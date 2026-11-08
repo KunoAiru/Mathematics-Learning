@@ -1,0 +1,36 @@
+# algebra: 計算ドリル（毎回数値が変わる問題。答えは src/generators で別解により検算済み）
+
+- id: alg.gcd
+  kind: problem
+  subject: algebra
+  title: ユークリッドの互除法（計算）
+  requires: []
+  generator: alg.gcd
+
+- id: alg.euler-phi
+  kind: problem
+  subject: algebra
+  title: オイラーの関数（計算）
+  requires: [alg.fermat]
+  generator: alg.euler-phi
+
+- id: alg.rsa-key
+  kind: problem
+  subject: algebra
+  title: RSA の秘密鍵（計算）
+  requires: [alg.rsa]
+  generator: alg.rsa-key
+
+- id: alg.cyclic-order
+  kind: problem
+  subject: algebra
+  title: 巡回群の元の位数（計算）
+  requires: [alg.cyclic]
+  generator: alg.cyclic-order
+
+- id: alg.perm-sign
+  kind: problem
+  subject: algebra
+  title: 置換の符号（計算）
+  requires: [alg.permutation]
+  generator: alg.perm-sign
